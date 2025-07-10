@@ -1,0 +1,8 @@
+# Ejemplo de configuración de riesgo para Mr. Cashondo
+
+# Opciones de modo de riesgo:
+# RISK_MODE = "percent_margin"  # Arriesga un % del balance/margen
+# RISK_MODE = "fixed_usd"       # Arriesga un monto fijo en USD por operación
+
+RISK_MODE = "fixed_usd"
+FIXED_RISK_USD = 1.0

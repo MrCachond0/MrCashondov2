@@ -1,0 +1,8 @@
+MetaTrader5
+pyTelegramBotAPI
+python-dotenv
+pandas
+numpy
+schedule
+pytest
+black
