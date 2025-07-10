@@ -136,10 +136,25 @@ class TelegramAlerts:
     
     def send_daily_summary(self, daily_stats: Dict) -> bool:
         """
-        (Deshabilitado) No enviar resumen diario a Telegram.
+        Envía el resumen diario de operaciones a Telegram.
+        Args:
+            daily_stats: Diccionario con estadísticas diarias
+        Returns:
+            True si se envió correctamente, False en caso de error
         """
-        logger.info("[Telegram] Resumen diario suprimido (no se envía a Telegram)")
-        return True
+        try:
+            message = self._format_daily_summary(daily_stats)
+            success = True
+            for chat_id in self.chat_ids:
+                try:
+                    self.bot.send_message(chat_id, message, parse_mode='HTML')
+                except Exception as e:
+                    logger.error(f"Error enviando resumen diario a {chat_id}: {str(e)}")
+                    success = False
+            return success
+        except Exception as e:
+            logger.error(f"Error formateando o enviando resumen diario: {str(e)}")
+            return False
     
     def send_bot_status(self, status: str, uptime: str, balance: float) -> bool:
         """
@@ -338,7 +353,7 @@ class TelegramAlerts:
             logger.info(f"Bot connected: {bot_info.username}")
             
             # Test sending message to all chat IDs
-            test_message = "🧪 <b>Test Message</b>\n\nMr.Cashondo Bot connection test successful!"
+            test_message = "💸🤖 <b>Test Message</b>\n\n💸Mr.CashondoV2🧠 Inicializado Correctamente! 💹Happy Trading💱!!"
             
             for chat_id in self.chat_ids:
                 try:

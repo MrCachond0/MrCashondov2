@@ -78,35 +78,32 @@ class MT5Connector:
     def connect(self) -> bool:
         """
         Connect to MetaTrader 5 platform
-        
         Returns:
             bool: True if connection successful, False otherwise
         """
         try:
+            import MetaTrader5 as mt5
             # Initialize MT5 connection
             if not mt5.initialize():
                 logger.error(f"MT5 initialization failed: {mt5.last_error()}")
                 return False
-            
             # Authorize with MT5
-            if not mt5.login(self.login, password=self.password, server=self.server):
-                logger.error(f"MT5 login failed: {mt5.last_error()}")
+            login_result = mt5.login(self.login, password=self.password, server=self.server)
+            if not login_result:
+                logger.error(f"MT5 login failed: {mt5.last_error()} (login={self.login}, server={self.server})")
                 mt5.shutdown()
                 return False
-            
             # Get account information
             self.account_info = mt5.account_info()
             if self.account_info is None:
                 logger.error("Failed to get account information")
+                mt5.shutdown()
                 return False
-            
             self.connected = True
             self.account_currency = self.account_info.currency
             logger.info(f"Successfully connected to MT5 - Account: {self.account_info.login}")
             logger.info(f"Balance: {self.account_info.balance}, Equity: {self.account_info.equity}")
-            
             return True
-            
         except Exception as e:
             logger.error(f"Connection error: {str(e)}")
             return False

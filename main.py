@@ -31,10 +31,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class MrCashondoBot:
+    def send_daily_summary(self):
+        """
+        Envía el resumen diario de operaciones a Telegram usando los datos del risk_manager.
+        """
+        if self.risk_manager and self.telegram_alerts:
+            daily_stats = self.risk_manager.get_risk_summary()
+            self.telegram_alerts.send_daily_summary(daily_stats)
+        else:
+            logger.warning("No se pudo enviar el resumen diario: risk_manager o telegram_alerts no inicializados.")
+
+    def reset_daily_stats(self):
+        """
+        Resetea las estadísticas diarias de riesgo (P&L, trades, etc).
+        """
+        if self.risk_manager:
+            self.risk_manager.reset_daily_stats()
+            logger.info("Estadísticas diarias reseteadas correctamente.")
+        else:
+            logger.warning("No se pudo resetear estadísticas diarias: risk_manager no inicializado.")
     """
     Main trading bot class
     """
-    
     def __init__(self):
         """Initialize the trading bot"""
         self.mt5_connector = None
@@ -48,13 +66,56 @@ class MrCashondoBot:
         # --- INTEGRACIÓN BASE DE DATOS ---
         from trade_database import TradeDatabase
         self.trade_db = TradeDatabase()
-        
         # Trading parameters
         self.scan_interval = 30  # seconds
         self.timeframes = ["M5", "M15"]  # Trading timeframes
         self.max_slippage = 5  # pips
-        
         logger.info("Mr.Cashondo Bot initialized")
+        self._subscription_validated = False
+
+    def validate_subscription(self):
+        """
+        Solicita email y token de suscripción solo una vez por ejecución y valida contra Supabase.
+        """
+        if self._subscription_validated:
+            return True
+        email = os.getenv("USER_EMAIL")
+        token = os.getenv("USER_TOKEN")
+        if not email:
+            email = input("Introduce tu email de suscripción: ").strip()
+            os.environ["USER_EMAIL"] = email
+        if not token:
+            token = input("Introduce tu Token de suscripción: ").strip()
+            os.environ["USER_TOKEN"] = token
+        # Validar suscripción vía API
+        try:
+            import requests
+            SUPABASE_URL = os.getenv("SUPABASE_URL")
+            SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
+            if not SUPABASE_URL or not SUPABASE_API_KEY:
+                print("❌ Faltan variables SUPABASE_URL o SUPABASE_API_KEY en .env")
+                logger.error("Faltan variables SUPABASE_URL o SUPABASE_API_KEY en .env")
+                return False
+            url = f"{SUPABASE_URL}/rest/v1/subscriptions?email=eq.{email}&select=active,expires_at"
+            headers = {
+                "apikey": SUPABASE_API_KEY,
+                "Authorization": f"Bearer {SUPABASE_API_KEY}"
+            }
+            resp = requests.get(url, headers=headers)
+            data = resp.json()
+            if data and data[0].get("active", False):
+                print("✅ Suscripción activa. Iniciando bot...")
+                logger.info(f"Suscripción validada correctamente para {email}")
+                self._subscription_validated = True
+                return True
+            else:
+                print("❌ Suscripción inactiva, expirada o Token incorrecto. Contacta soporte.")
+                logger.error(f"Suscripción inactiva o Token incorrecto para {email}")
+                return False
+        except Exception as e:
+            print(f"❌ Error crítico validando suscripción: {e}")
+            logger.error(f"Error crítico validando suscripción: {e}")
+            return False
     
     def initialize_components(self) -> bool:
         """
@@ -543,52 +604,58 @@ class MrCashondoBot:
         except Exception as e:
             logger.error(f"Error monitoring position {ticket}: {str(e)}")
     
-    def send_daily_summary(self) -> None:
-        """Send daily trading summary"""
+    def start_trading(self) -> None:
+        """Start the trading bot with a fixed 15-minute scan interval for all symbols, sin rotación, escaneando todos los símbolos cada ciclo."""
         try:
-            # Get account balance
-            balance = self.mt5_connector.get_account_balance()
-            
-            # Get risk manager statistics
-            risk_stats = self.risk_manager.get_risk_summary()
-            
-            # Create daily stats
-            daily_stats = {
-                'total_pnl': risk_stats['daily_pnl'],
-                'total_trades': risk_stats['daily_trades'],
-                'winning_trades': 0,  # Would need to track this
-                'losing_trades': 0,   # Would need to track this
-                'account_balance': balance
-            }
-            
-            # Send summary
-            self.telegram_alerts.send_daily_summary(daily_stats)
-            
+            # Validar suscripción SOLO UNA VEZ antes de iniciar el bot
+            if not self.validate_subscription():
+                logger.error("No se pudo validar la suscripción. El bot no se iniciará.")
+                return
+            if not self.initialize_components():
+                logger.error("Failed to initialize components")
+                return
+            self.running = True
+            logger.info("Mr.Cashondo Bot started successfully")
+
+            # Schedule daily summary
+            schedule.every().day.at("23:59").do(self.send_daily_summary)
+            # Schedule daily reset
+            schedule.every().day.at("00:00").do(self.reset_daily_stats)
+
+            # Ejecutar el primer escaneo inmediatamente
+            logger.info("Executing initial scan...")
+            self.scan_and_execute()
+            self.monitor_positions()
+            self.last_scan_time = datetime.now()
+            logger.info("Initial scan completed")
+
+            # Main trading loop: escanea TODOS los símbolos cada 15 minutos
+            scan_interval_minutes = 15
+            while self.running:
+                try:
+                    schedule.run_pending()
+                    current_time = datetime.now()
+                    time_since_last_scan = (current_time - self.last_scan_time).total_seconds() / 60
+                    # Log para confirmar que el bot está activo
+                    if int(time_since_last_scan) % 1 == 0 and time_since_last_scan < scan_interval_minutes:
+                        logger.debug(f"Bot active, waiting for scan ({time_since_last_scan:.1f}/{scan_interval_minutes} minutes passed)")
+                    # Ejecutar scan si han pasado 15 minutos desde el último
+                    if time_since_last_scan >= scan_interval_minutes:
+                        self.scan_and_execute()
+                        self.monitor_positions()
+                        self.last_scan_time = datetime.now()
+                    time.sleep(5)
+                except KeyboardInterrupt:
+                    logger.info("Received keyboard interrupt, stopping bot...")
+                    self.stop_trading()
+                    break
+                except Exception as e:
+                    logger.error(f"Error in main trading loop: {str(e)}")
+                    self.telegram_alerts.send_error_alert(str(e), "Main trading loop")
+                    time.sleep(60)
         except Exception as e:
-            logger.error(f"Error sending daily summary: {str(e)}")
-    
-    def reset_daily_stats(self) -> None:
-        """Reset daily statistics"""
-        try:
-            self.risk_manager.reset_daily_stats()
-            logger.info("Daily statistics reset")
-        except Exception as e:
-            logger.error(f"Error resetting daily stats: {str(e)}")
-    
-    def stop_trading(self) -> None:
-        """Stop the trading bot"""
-        try:
-            self.running = False
-            
-            # Send stop message
-            uptime = str(datetime.now() - self.start_time)
-            balance = self.mt5_connector.get_account_balance()
-            
-            self.telegram_alerts.send_bot_status(
-                status="🔴 DETENIDO",
-                uptime=uptime,
-                balance=balance
-            )
+            logger.error(f"Critical error in start_trading: {str(e)}")
+            self.telegram_alerts.send_error_alert(str(e), "Critical error")
             
             # Disconnect from MT5
             if self.mt5_connector:

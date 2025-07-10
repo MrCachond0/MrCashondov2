@@ -1,3 +1,57 @@
+# Mr.Cashondo Trading Bot
+
+## Descripción
+Mr.Cashondo es un bot de trading automatizado para FOREX, índices y metales, con gestión de riesgo avanzada y alertas por Telegram. El bot realiza escaneos periódicos de todos los símbolos disponibles y ejecuta operaciones según señales generadas por algoritmos propios.
+
+## Flujo de Ejecución Actualizado
+1. **Validación de Suscripción:**
+   - Al iniciar el bot, se solicita el correo y token de suscripción SOLO UNA VEZ por ejecución.
+   - La validación se realiza contra una base de datos en Supabase.
+   - Si la suscripción es válida, el bot continúa; si no, se detiene.
+2. **Inicialización de Componentes:**
+   - Conexión a MetaTrader 5 (MT5) usando los datos de cuenta, password y servidor.
+   - Inicialización de generador de señales, gestor de riesgo y alertas de Telegram.
+3. **Escaneo y Ejecución:**
+   - El bot escanea TODOS los símbolos de FOREX, índices y metales configurados en la cuenta MT5.
+   - Procesa señales, ejecuta operaciones y gestiona posiciones activas.
+4. **Alertas y Reportes:**
+   - Envía alertas de señales y ejecuciones a Telegram.
+   - Envía resumen diario y notificaciones de errores críticos.
+
+## Instalación y Uso
+
+### Requisitos
+- Windows 10/11
+- MetaTrader 5 instalado
+- Python 3.10+ (solo para desarrollo o ejecución directa)
+- Cuenta activa y suscripción válida
+
+### Instalación Automática vía .exe
+Próximamente estará disponible un instalador `.exe` que:
+- Instala todas las dependencias necesarias.
+- Solicita los datos de cuenta, password y servidor de MT5 al primer uso.
+- Protege el código y credenciales mediante cifrado y ofuscación para evitar clonación o robo.
+- Permite ejecutar el bot con doble clic, sin requerir conocimientos técnicos.
+
+### Instalación Manual (Desarrolladores)
+1. Clona el repositorio.
+2. Instala dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Configura el archivo `.env` con tus credenciales y claves de API.
+4. Ejecuta el bot:
+   ```bash
+   python main.py
+   ```
+
+## Seguridad y Protección
+- El instalador .exe cifrará los archivos críticos y credenciales.
+- El código fuente estará ofuscado y protegido contra ingeniería inversa.
+- La validación de suscripción es obligatoria y se realiza en cada inicio.
+
+## Soporte
+Para soporte técnico o problemas con la suscripción, contacta al desarrollador.
 
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -126,6 +180,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+
 4. **Configura las variables de entorno**
    - Copia `.env.example` a `.env`
    - Completa con tus credenciales reales:
@@ -135,8 +190,25 @@ pip install -r requirements.txt
      MT5_LOGIN=tu_login_mt5
      MT5_PASSWORD=tu_password_mt5
      MT5_SERVER=tu_servidor_mt5
+     # --- Suscripciones (Supabase + Stripe) ---
+     SUPABASE_URL=https://<tu-proyecto>.supabase.co
+     SUPABASE_API_KEY=tu_api_key_publica
+     SUBSCRIPTION_API_URL=https://<tu-backend>.vercel.app/validate
+     # USER_EMAIL=usuario@dominio.com  # (opcional)
      ```
    - **¡No subas nunca tu archivo `.env` real a GitHub!**
+
+## 🔑 Control de suscripciones (Supabase + Stripe)
+
+El bot valida tu suscripción antes de operar. Debes tener un email registrado y activo en la base de datos de Supabase (se activa automáticamente al pagar por Stripe).
+
+Al iniciar el bot, se te pedirá tu email de suscripción (o lo puedes dejar en `.env`).
+Si la suscripción está activa, el bot funcionará normalmente. Si no, se bloqueará y mostrará un mensaje de error.
+
+**¿Cómo funciona?**
+- El backend recibe los pagos de Stripe y actualiza la tabla de suscripciones en Supabase.
+- El bot consulta la API `/validate?email=...` antes de operar.
+- Si la suscripción está activa, permite el uso; si no, lo bloquea.
 
 5. **Configuración rápida en Windows**
    - Ejecuta `setup.bat` para instalar todo automáticamente.
