@@ -44,6 +44,55 @@ class PositionSize:
     stop_loss_pips: float
 
 class RiskManager:
+    def calculate_dynamic_tp_sl(self, close_prices: np.ndarray, entry_price: float, signal_type: str, atr: float) -> Tuple[float, float]:
+        """
+        Calcula SL y TP dinámicos usando ATR y estructura de mercado (fractales).
+        """
+        from signal_generator import TechnicalIndicators
+        highs, lows = TechnicalIndicators.find_fractals(close_prices)
+        if signal_type == 'BUY':
+            # SL: último swing low, TP: swing high o 2*ATR
+            swing_lows = [close_prices[i] for i in lows if close_prices[i] < entry_price]
+            sl_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_lows)
+            sl_atr = entry_price - 1.2 * atr
+            stop_loss = max(sl_fractal, sl_atr) if swing_lows else sl_atr
+            # TP dinámico
+            swing_highs = [close_prices[i] for i in highs if close_prices[i] > entry_price]
+            tp_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_highs)
+            tp_atr = entry_price + 2 * atr
+            take_profit = min(tp_fractal, tp_atr) if swing_highs else tp_atr
+        else:
+            swing_highs = [close_prices[i] for i in highs if close_prices[i] > entry_price]
+            sl_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_highs)
+            sl_atr = entry_price + 1.2 * atr
+            stop_loss = min(sl_fractal, sl_atr) if swing_highs else sl_atr
+            swing_lows = [close_prices[i] for i in lows if close_prices[i] < entry_price]
+            tp_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_lows)
+            tp_atr = entry_price - 2 * atr
+            take_profit = max(tp_fractal, tp_atr) if swing_lows else tp_atr
+        return stop_loss, take_profit
+
+    def calculate_trailing_stop(self, close_prices: np.ndarray, signal_type: str, period: int = 20) -> float:
+        """
+        Calcula el nivel de trailing stop usando EMA o fractales.
+        """
+        from signal_generator import TechnicalIndicators
+        closes_np = np.array(close_prices)
+        ema = TechnicalIndicators.ema(closes_np, period)
+        if signal_type == 'BUY':
+            return ema[-1]
+        else:
+            return ema[-1]
+
+    def calculate_break_even(self, entry_price: float, stop_loss: float, signal_type: str, r_multiple: float = 1.0) -> float:
+        """
+        Calcula el nivel de break-even (mover SL a entrada tras 1R).
+        """
+        r = abs(entry_price - stop_loss)
+        if signal_type == 'BUY':
+            return entry_price + r_multiple * r
+        else:
+            return entry_price - r_multiple * r
     def calculate_position_size_fixed_usd(self, symbol: str, entry_price: float, stop_loss: float,
                                          symbol_info: Dict, fixed_risk_usd: float) -> Optional[PositionSize]:
         """
@@ -175,18 +224,25 @@ class RiskManager:
         # Multiplicadores dinámicos optimizados
         sl_mult = max(1.2, symbol_info.get('sl_multiplier', 1.5))  # Mínimo 1.2x ATR
         tp_mult = max(2.0, symbol_info.get('tp_multiplier', 2.5))  # Mínimo 2.0x ATR
-        
-        logger.info(f"[ADJUST_STOPS] {signal_type} para entry={entry_price}, min_distance={min_sl_distance}")
-        
-        # --- CÁLCULO ÓPTIMO CON ATR ---
+
+        # --- TP DINÁMICO SEGÚN ESTRUCTURA DEL MERCADO Y ATR ---
+        # Si tienes un módulo de estructura, reemplaza este bloque por la lógica real de swing high/low o soporte/resistencia
         if atr is not None and atr > 0:
+            adx = symbol_info.get('adx', None)
+            # Ajuste de tp_mult según ADX (fuerza de tendencia)
+            if adx is not None:
+                if adx > 25:
+                    tp_mult = 2.5  # Mercado fuerte, TP más ambicioso
+                elif adx < 15:
+                    tp_mult = 1.5  # Mercado débil, TP más conservador
+            # Rango dinámico: entre 1.5 y 2.5 × ATR
             if signal_type == "BUY":
-                stop_loss = entry_price - (sl_mult * atr)
-                take_profit = entry_price + (tp_mult * atr)
-            else:  # SELL
-                stop_loss = entry_price + (sl_mult * atr)
-                take_profit = entry_price - (tp_mult * atr)
-            logger.info(f"[ADJUST_STOPS] Calculados con ATR: SL={stop_loss}, TP={take_profit}")
+                take_profit = entry_price + max(tp_mult * atr, min_sl_distance)
+                stop_loss = entry_price - max(sl_mult * atr, min_sl_distance)
+            else:
+                take_profit = entry_price - max(tp_mult * atr, min_sl_distance)
+                stop_loss = entry_price + max(sl_mult * atr, min_sl_distance)
+            logger.info(f"[ADJUST_STOPS] TP dinámico: SL={stop_loss}, TP={take_profit}, ATR={atr}, ADX={adx}")
         
         # --- VALIDACIÓN Y AJUSTE FINAL ROBUSTO ---
         if signal_type == "BUY":

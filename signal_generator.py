@@ -103,6 +103,35 @@ class VirtualTrade:
         }
 
 class TechnicalIndicators:
+    @staticmethod
+    def find_fractals(data: np.ndarray, window: int = 2) -> Tuple[List[int], List[int]]:
+        """
+        Detecta índices de swing highs y swing lows (fractales) en los datos de precios.
+        Args:
+            data: array de precios (close)
+            window: número de velas a cada lado para considerar un fractal
+        Returns:
+            (swing_highs, swing_lows): listas de índices
+        """
+        swing_highs = []
+        swing_lows = []
+        for i in range(window, len(data) - window):
+            is_high = all(data[i] > data[i - j] for j in range(1, window + 1)) and all(data[i] > data[i + j] for j in range(1, window + 1))
+            is_low = all(data[i] < data[i - j] for j in range(1, window + 1)) and all(data[i] < data[i + j] for j in range(1, window + 1))
+            if is_high:
+                swing_highs.append(i)
+            if is_low:
+                swing_lows.append(i)
+        return swing_highs, swing_lows
+
+    @staticmethod
+    def find_nearest_level(price: float, levels: List[float]) -> float:
+        """
+        Encuentra el nivel más cercano a un precio dado.
+        """
+        if not levels:
+            return price
+        return min(levels, key=lambda x: abs(x - price))
     """
     Technical indicators calculation class
     """
@@ -392,6 +421,32 @@ class CandlestickPatterns:
         return bullish_pin, bearish_pin
 
 class SignalGenerator:
+    def calculate_dynamic_tp(self, close_prices: np.ndarray, entry_price: float, atr: float, signal_type: str) -> float:
+        """
+        Calcula un TP dinámico usando swings/fractales y ATR.
+        """
+        highs, lows = TechnicalIndicators.find_fractals(close_prices)
+        if signal_type == 'BUY':
+            # Buscar el swing high más cercano por encima del entry
+            swing_highs = [close_prices[i] for i in highs if close_prices[i] > entry_price]
+            tp_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_highs)
+            tp_atr = entry_price + 2 * atr
+            return min(tp_fractal, tp_atr) if swing_highs else tp_atr
+        else:
+            swing_lows = [close_prices[i] for i in lows if close_prices[i] < entry_price]
+            tp_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_lows)
+            tp_atr = entry_price - 2 * atr
+            return max(tp_fractal, tp_atr) if swing_lows else tp_atr
+
+    def calculate_partial_tp(self, entry_price: float, stop_loss: float, signal_type: str, r_multiple: float = 1.5) -> float:
+        """
+        Calcula el nivel de TP parcial (por ejemplo, 1.5R).
+        """
+        r = abs(entry_price - stop_loss)
+        if signal_type == 'BUY':
+            return entry_price + r_multiple * r
+        else:
+            return entry_price - r_multiple * r
     def _rotate_symbols(self, mt5_connector=None):
         """
         Rotación deshabilitada: siempre se analizan todos los símbolos disponibles de FOREX, metales e índices.

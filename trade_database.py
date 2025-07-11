@@ -68,6 +68,43 @@ class TradeDatabase:
         """
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
+            # ...existing code...
+
+    def update_trade_status_by_order_id(self, order_id: str, status: str, close_price: Optional[float] = None, close_time: Optional[str] = None, profit: Optional[float] = None) -> None:
+        """
+        Actualiza el estado de una operación (trade) en la base de datos usando el order_id de MT5.
+        Si el cierre es por SL pero el profit es positivo, marca como 'trailing'.
+        Args:
+            order_id: ID de la orden en MT5.
+            status: Nuevo estado ('tp', 'sl', 'trailing', etc.).
+            close_price: Precio de cierre (opcional).
+            close_time: Timestamp de cierre (opcional).
+            profit: Ganancia de la operación (opcional, para distinguir trailing).
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            c = conn.cursor()
+            final_status = status
+            # Si el cierre es SL y profit positivo, marcar como trailing
+            if status.lower() == 'sl' and profit is not None and profit > 0:
+                final_status = 'trailing'
+            # Si es cierre parcial, marcar campo partial_closed
+            if status == 'partial_tp':
+                c.execute("UPDATE trades SET partial_closed = 1 WHERE order_id = ?", (order_id,))
+            updates = ["status = ?"]
+            values = [final_status]
+            if close_price is not None:
+                updates.append("close_price = ?")
+                values.append(close_price)
+            if close_time is not None:
+                updates.append("close_time = ?")
+                values.append(close_time)
+            if profit is not None:
+                updates.append("profit = ?")
+                values.append(profit)
+            values.append(order_id)
+            set_clause = ", ".join(updates)
+            c.execute(f"UPDATE trades SET {set_clause} WHERE order_id = ?", values)
+            conn.commit()
             c.execute('''
                 INSERT INTO signals (symbol, timeframe, signal_type, entry_price, stop_loss, take_profit, confidence, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)

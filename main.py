@@ -33,6 +33,130 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class MrCashondoBot:
+
+    def check_and_update_open_trades(self):
+        """
+        Revisa todos los trades abiertos y evalúa cierre por TP, SL, TP parcial y trailing estructural.
+        """
+        open_trades = self.trade_db.get_trades(status="open")
+        for trade in open_trades:
+            symbol = trade['symbol']
+            signal_type = trade['action'].upper()
+            entry_price = trade['price']
+            stop_loss = trade['sl']
+            take_profit = trade['tp']
+            order_id = trade['order_id']
+            open_time = trade['open_time']
+            volume = trade.get('volume', 1)
+            timeframe = trade.get('timeframe', 'M5')
+            # Obtener datos de mercado suficientes para trailing y estructura
+            if not self.mt5_connector or not self.mt5_connector.connected:
+                continue
+            market_data = self.mt5_connector.get_market_data(symbol, timeframe, count=50)
+            if not market_data or len(market_data.close) < 20:
+                continue
+            closes = market_data.close
+            last_price = float(closes[-1])
+            close_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            profit = None
+            status = None
+            # --- TP Parcial ---
+            partial_tp = self.signal_generator.calculate_partial_tp(entry_price, stop_loss, signal_type, r_multiple=1.5)
+            if signal_type == 'BUY':
+                if last_price >= take_profit:
+                    status = 'tp'
+                    profit = (take_profit - entry_price) * volume
+                elif last_price >= partial_tp and not trade.get('partial_closed'):
+                    # Cierre parcial
+                    partial_volume = volume / 2
+                    self.trade_db.update_trade_status_by_order_id(
+                        order_id=order_id,
+                        status='partial_tp',
+                        close_price=last_price,
+                        close_time=close_time,
+                        profit=(last_price - entry_price) * partial_volume
+                    )
+                    logger.info(f"Trade {order_id} cierre parcial en {last_price}")
+                    continue
+                elif last_price <= stop_loss:
+                    status = 'sl'
+                    profit = (stop_loss - entry_price) * volume
+            elif signal_type == 'SELL':
+                if last_price <= take_profit:
+                    status = 'tp'
+                    profit = (entry_price - take_profit) * volume
+                elif last_price <= partial_tp and not trade.get('partial_closed'):
+                    partial_volume = volume / 2
+                    self.trade_db.update_trade_status_by_order_id(
+                        order_id=order_id,
+                        status='partial_tp',
+                        close_price=last_price,
+                        close_time=close_time,
+                        profit=(entry_price - last_price) * partial_volume
+                    )
+                    logger.info(f"Trade {order_id} cierre parcial en {last_price}")
+                    continue
+                elif last_price >= stop_loss:
+                    status = 'sl'
+                    profit = (entry_price - stop_loss) * volume
+            # --- Trailing estructural (EMA20) ---
+            trailing_level = self.risk_manager.calculate_trailing_stop(closes, signal_type, period=20)
+            r = abs(entry_price - stop_loss)
+            if signal_type == 'BUY' and last_price > entry_price + r:
+                if last_price <= trailing_level:
+                    status = 'trailing'
+                    profit = (last_price - entry_price) * volume
+            elif signal_type == 'SELL' and last_price < entry_price - r:
+                if last_price >= trailing_level:
+                    status = 'trailing'
+                    profit = (entry_price - last_price) * volume
+            # --- Cierre y registro ---
+            if status:
+                self.trade_db.update_trade_status_by_order_id(
+                    order_id=order_id,
+                    status=status,
+                    close_price=last_price,
+                    close_time=close_time,
+                    profit=profit
+                )
+                logger.info(f"Trade {order_id} cerrado por {status.upper()} (profit={profit})")
+                    if trailing_level > stop_loss and trailing_level < last_price:
+                        # Actualizar SL en BD y en MT5
+                        self.trade_db.update_trade_status_by_order_id(order_id, status='trailing', close_price=None, close_time=None, profit=None)
+                        # Aquí deberías llamar a la función para modificar el SL en MT5
+                        stop_loss = trailing_level
+                        logger.info(f"Trailing SL BUY a EMA20: {stop_loss}")
+                # Cierre por TP/SL
+                if last_price >= take_profit:
+                    status = 'tp'
+                    profit = (take_profit - entry_price) * volume
+                elif last_price <= stop_loss:
+                    # Si SL fue movido por trailing, marcarlo
+                    status = 'trailing' if stop_loss != trade['sl'] else 'sl'
+                    profit = (stop_loss - entry_price) * volume
+            elif signal_type == 'SELL':
+                if last_price < entry_price - r:
+                    if trailing_level < stop_loss and trailing_level > last_price:
+                        self.trade_db.update_trade_status_by_order_id(order_id, status='trailing', close_price=None, close_time=None, profit=None)
+                        stop_loss = trailing_level
+                        logger.info(f"Trailing SL SELL a EMA20: {stop_loss}")
+                if last_price <= take_profit:
+                    status = 'tp'
+                    profit = (entry_price - take_profit) * volume
+                elif last_price >= stop_loss:
+                    status = 'trailing' if stop_loss != trade['sl'] else 'sl'
+                    profit = (entry_price - stop_loss) * volume
+            # Si cerró, actualizar en la BD
+            if status:
+                self.trade_db.update_trade_status_by_order_id(
+                    order_id=order_id,
+                    status=status,
+                    close_price=last_price,
+                    close_time=close_time,
+                    profit=profit
+                )
+                logger.info(f"Trade {order_id} cerrado por {status.upper()} (profit={profit})")
+            # Si no, sigue abierto
     def send_daily_summary(self):
         """
         Envía el resumen diario de operaciones a Telegram usando los datos del risk_manager.
@@ -182,7 +306,7 @@ class MrCashondoBot:
             return False
     
     def start_trading(self) -> None:
-        """Start the trading bot with a fixed 15-minute scan interval for all symbols, sin rotación, escaneando todos los símbolos cada ciclo."""
+        """Start the trading bot with un ciclo principal que revisa y cierra trades automáticamente (TP, SL, trailing)."""
         try:
             if not self.initialize_components():
                 logger.error("Failed to initialize components")
@@ -199,6 +323,7 @@ class MrCashondoBot:
             logger.info("Executing initial scan...")
             self.scan_and_execute()
             self.monitor_positions()
+            self.check_and_update_open_trades()
             self.last_scan_time = datetime.now()
             logger.info("Initial scan completed")
 
@@ -217,6 +342,7 @@ class MrCashondoBot:
                         logger.info(f"Scan interval reached ({time_since_last_scan:.1f} minutes). Starting scan...")
                         self.scan_and_execute()
                         self.monitor_positions()
+                        self.check_and_update_open_trades()
                         self.last_scan_time = datetime.now()
                     time.sleep(5)
                 except KeyboardInterrupt:
