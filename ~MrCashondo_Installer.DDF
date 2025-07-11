@@ -1,0 +1,72 @@
+;Auto-generated Diamond Directive File. Can be deleted without harm.
+.Set CabinetNameTemplate=C:\Users\julia\OneDrive\Documentos\Bots_Ingresos_Pasivos\MrCashondo\~MrCashondo_Installer.CAB
+.Set CompressionType=LZX
+.Set CompressionLevel=7
+.Set InfFileName=C:\Users\julia\OneDrive\Documentos\Bots_Ingresos_Pasivos\MrCashondo\~MrCashondo_Installer_LAYOUT.INF
+.Set RptFileName=C:\Users\julia\OneDrive\Documentos\Bots_Ingresos_Pasivos\MrCashondo\~MrCashondo_Installer.RPT
+.Set MaxDiskSize=CDROM
+.Set ReservePerCabinetSize=0
+.Set InfCabinetLineFormat=*cab#*=Application Source Media,*cabfile*,0
+.Set Compress=on
+.Set CompressionMemory=21
+.Set DiskDirectoryTemplate=
+.Set Cabinet=ON
+.Set MaxCabinetSize=999999999
+.Set InfDiskHeader=
+.Set InfDiskLineFormat=
+.Set InfCabinetHeader=[SourceDisksNames]
+.Set InfFileHeader=
+.Set InfFileHeader1=[SourceDisksFiles]
+.Set InfFileLineFormat=*file*=*cab#*,,*size*,*csum*
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\ENV~1.EXA
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\GITIGN~1
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\Ajustes.md
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\BUILD_~1.BAT
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\CLEAN_~1.BAT
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\CONFIG~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\ENV_LO~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\ESTRAT~1.MD
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\EULA.txt
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\EXPORT~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\FIRST_~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\FOREXT~1.MD
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\main.py
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\MRCASH~1.PNG
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\MR_CAS~1.LOG
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\MT5_CO~1.LOG
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\MT5_CO~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\newlog.log
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\PEPPER~1.CSV
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\README.md
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\README~2.MD
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\README~1.MD
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\REPORT~1.CSV
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\REQUIR~1.TXT
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\REQUIR~2.TXT
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\RISK_C~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\RISK_C~1.EXA
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\RISK_M~1.LOG
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\RISK_M~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\run_bot.bat
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\RUN_TE~1.BAT
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\setup.bat
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\SETUP_~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\SIGNAL~1.LOG
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\SIGNAL~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\STOPS_~1.MD
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\SUBSCR~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TELEGR~1.LOG
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TELEGR~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_A~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_A~2.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\test_bot.py
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_C~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_D~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_F~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_R~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_S~4.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_S~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_S~3.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TEST_S~2.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\TRADE_~1.PY
+C:\Users\julia\OneDrive\DOCUME~1\BOTS_I~1\MRCASH~2\trades.db

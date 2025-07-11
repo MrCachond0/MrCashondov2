@@ -1,0 +1,6 @@
+# requirements_installer.txt
+# Requisitos mínimos para el instalador y protección
+pyinstaller
+pyarmor
+python-dotenv
+getpass4

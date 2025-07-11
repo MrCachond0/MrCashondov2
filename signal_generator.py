@@ -505,12 +505,12 @@ class SignalGenerator:
         Filtros endurecidos y score recalibrado a 0.7 (jul 2025).
         """
         return {
-            'adx_threshold': 7,  # Más estricto
-            'confidence_threshold': 0.7,  # Recalibrado
-            'max_spread_threshold': 15,   # Más estricto
-            'sl_multiplier': 1.2,
-            'tp_multiplier': 1.8,
-            'min_atr_threshold': 0.0008   # Nuevo filtro sutil de volatilidad mínima
+            'adx_threshold': 8,  # Ligeramente más estricto
+            'confidence_threshold': 0.8,  # Recalibrado a 0.8
+            'max_spread_threshold': 12,   # Más estricto
+            'sl_multiplier': 1.25,        # SL un poco más amplio
+            'tp_multiplier': 1.7,         # TP un poco más exigente
+            'min_atr_threshold': 0.001    # ATR mínimo ligeramente mayor
         }
     def _is_symbol_type_enabled(self, symbol: str) -> bool:
         """

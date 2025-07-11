@@ -1,0 +1,76 @@
+MrCashondoV2 - Acuerdo de Licencia de Usuario Final (EULA)
+
+Este Acuerdo de Licencia de Usuario Final ("EULA") es un contrato legal entre usted ("Usuario") y el desarrollador de MrCashondoV2 ("Desarrollador"). Al instalar, acceder o utilizar el software MrCashondoV2 ("Software"), usted acepta los términos de este acuerdo. Si no acepta estos términos, no debe instalar ni usar el Software.
+
+1. Licencia Limitada
+El Desarrollador otorga al Usuario una licencia personal, no exclusiva, no transferible y revocable para usar MrCashondoV2 con fines personales y no comerciales. Esta licencia no implica transferencia de propiedad ni de derechos intelectuales.
+
+2. Propiedad Intelectual
+El Software, su código fuente, algoritmos, documentación y cualquier material relacionado son propiedad exclusiva del Desarrollador y están protegidos por leyes de derechos de autor y tratados internacionales.
+
+3. Restricciones
+- Queda estrictamente prohibido copiar, distribuir, vender, sublicenciar, alquilar, modificar, descompilar, realizar ingeniería inversa, clonar o crear trabajos derivados del Software.
+- No puede compartir, publicar ni divulgar el Software ni ninguna parte de su código, cifrado o no, a terceros.
+- No puede utilizar el Software para fines comerciales, de reventa o como servicio a terceros.
+
+4. Confidencialidad y Seguridad
+- El Usuario se compromete a mantener en secreto cualquier clave, archivo cifrado o mecanismo de protección incluido en el Software.
+- El Usuario no intentará eludir, desactivar o vulnerar los sistemas de cifrado, protección u ofuscación implementados.
+
+5. Limitación de Responsabilidad
+El Software se proporciona "tal cual", sin garantías de ningún tipo. El Desarrollador no será responsable por daños directos, indirectos, incidentales, especiales o consecuentes derivados del uso o imposibilidad de uso del Software.
+
+6. Terminación
+Esta licencia se rescindirá automáticamente si el Usuario incumple cualquiera de los términos aquí establecidos. En caso de terminación, el Usuario deberá eliminar todas las copias del Software y archivos relacionados.
+
+7. Jurisdicción
+Este acuerdo se regirá por las leyes del país del Desarrollador. Cualquier disputa será resuelta en los tribunales competentes de dicha jurisdicción.
+
+---
+
+Al instalar o usar MrCashondoV2, usted reconoce haber leído, entendido y aceptado este EULA en su totalidad.
+
+---
+
+© 2025 MrCashondoV2. Todos los derechos reservados.
+Última actualización: 11 de julio de 2025
+
+1. ACEPTACIÓN DEL ACUERDO
+Este Acuerdo de Licencia de Usuario Final ("EULA") es un contrato legal entre tú ("Usuario") y el desarrollador de MrCashondoV2 ("Desarrollador"). Al instalar, acceder o utilizar el software MrCashondoV2 ("Software"), aceptas los términos de este acuerdo. Si no aceptas estos términos, no debes instalar ni usar el Software.
+
+2. LICENCIA LIMITADA
+El Desarrollador otorga al Usuario una licencia personal, no exclusiva, no transferible y revocable para usar MrCashondoV2 con fines personales y no comerciales. Esta licencia no implica transferencia de propiedad ni de derechos intelectuales.
+
+3. PROPIEDAD INTELECTUAL
+Todo el contenido, código fuente, estructura, diseño, funciones y documentación relacionada con MrCashondoV2 son propiedad exclusiva del Desarrollador y están protegidos por leyes de propiedad intelectual nacionales e internacionales.
+
+Está estrictamente prohibido copiar, modificar, descompilar, hacer ingeniería inversa, distribuir, sublicenciar, vender o explotar de cualquier manera este software o cualquier parte del mismo sin autorización expresa y por escrito del Desarrollador.
+
+4. RESTRICCIONES
+El Usuario no debe:
+
+Usar el Software con fines comerciales sin autorización.
+
+Vender, revender, alquilar, arrendar, sublicenciar o distribuir el Software a terceros.
+
+Modificar, traducir o crear trabajos derivados del Software.
+
+Eludir, desactivar o interferir con funciones de seguridad del Software.
+
+Usar el Software en violación de cualquier ley aplicable.
+
+5. USO DEL SOFTWARE
+MrCashondoV2 está diseñado como una herramienta de apoyo para decisiones de trading y generación de señales. No garantiza beneficios ni elimina el riesgo inherente a la inversión. El Usuario es el único responsable del uso de las señales y operaciones realizadas.
+
+6. LIMITACIÓN DE RESPONSABILIDAD
+El Software se proporciona "TAL CUAL", sin garantías de ningún tipo, expresas o implícitas. En ningún caso el Desarrollador será responsable por pérdidas económicas, daños directos o indirectos, lucro cesante, o cualquier consecuencia derivada del uso del Software.
+
+7. TERMINACIÓN
+Este EULA terminará automáticamente si el Usuario incumple cualquiera de sus términos. En caso de terminación, el Usuario deberá cesar todo uso del Software y eliminar todas las copias en su posesión.
+
+8. MODIFICACIONES
+El Desarrollador se reserva el derecho de modificar este EULA en cualquier momento. Es responsabilidad del Usuario revisar periódicamente los términos actualizados.
+
+9. LEGISLACIÓN APLICABLE
+Este acuerdo se regirá por las leyes de México. Cualquier disputa será resuelta en los tribunales competentes del Estado de residencia del Desarrollador.
+

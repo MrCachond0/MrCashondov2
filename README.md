@@ -26,23 +26,27 @@ Mr.Cashondo es un bot de trading automatizado para FOREX, índices y metales, co
 - Python 3.10+ (solo para desarrollo o ejecución directa)
 - Cuenta activa y suscripción válida
 
-### Instalación Automática vía .exe
-Próximamente estará disponible un instalador `.exe` que:
-- Instala todas las dependencias necesarias.
-- Solicita los datos de cuenta, password y servidor de MT5 al primer uso.
-- Protege el código y credenciales mediante cifrado y ofuscación para evitar clonación o robo.
-- Permite ejecutar el bot con doble clic, sin requerir conocimientos técnicos.
 
-### Instalación Manual (Desarrolladores)
+### Instalación y Uso
+
 1. Clona el repositorio.
-2. Instala dependencias:
-   ```bash
-   pip install -r requirements.txt
+2. Ejecuta el script de instalación automática:
+   ```bat
+   setup.bat
    ```
-3. Configura el archivo `.env` con tus credenciales y claves de API.
-4. Ejecuta el bot:
-   ```bash
-   python main.py
+   Esto instalará todas las dependencias necesarias en un entorno virtual y creará el archivo `.env` si no existe.
+3. Edita el archivo `.env` con tus credenciales y claves de API.
+4. Para ejecutar el bot:
+   ```bat
+   run_bot.bat
+   ```
+5. Para limpiar y reinstalar dependencias:
+   ```bat
+   clean_setup.bat
+   ```
+6. Para correr los tests:
+   ```bat
+   run_tests.bat
    ```
 
 ## Seguridad y Protección
@@ -86,8 +90,8 @@ MrCashondo/
 
 1. **Inicialización**: Carga de variables de entorno y configuración de instrumentos. Conexión a MetaTrader 5 usando credenciales del `.env`.
 2. **Rotación y Escaneo**: Rotación entre ~370 símbolos (FOREX, metales, índices). Analiza 50 símbolos por ciclo (cada 30 segundos aprox.). Filtros pre-técnicos eliminan símbolos inoperables (spread, volumen, datos insuficientes).
-3. **Generación de Señales**: Filtros técnicos y scoring flexible (mínimo 1 condición técnica). Detección expandida de cruces EMA, RSI, ATR, ADX y patrones de velas. Se genera una señal por cada oportunidad válida, sin límite artificial de cantidad (el límite real es la gestión de riesgo y posiciones abiertas).
-4. **Gestión de Riesgo**: Cálculo de lotaje y SL/TP usando el balance y ATR. Límites: máximo 4 posiciones abiertas globales, 1 por símbolo, máximo 1% de riesgo por operación.
+3. **Generación de Señales**: Filtros técnicos y scoring flexible (score mínimo 0.8, filtros endurecidos: ADX ≥ 8, spread ≤ 12, ATR mínimo 0.001, SL 1.25×ATR, TP 1.7×ATR). Detección expandida de cruces EMA, RSI, ATR, ADX y patrones de velas. Se genera una señal por cada oportunidad válida, sin límite artificial de cantidad (el límite real es la gestión de riesgo y posiciones abiertas).
+4. **Gestión de Riesgo**: Cálculo de lotaje y SL/TP usando el balance y ATR. Límites: máximo 4 posiciones abiertas globales, 1 por símbolo, máximo 0.6% de riesgo por operación (ajustable en risk_config.py).
 5. **Ejecución y Notificación**: Si la señal pasa todos los filtros, se ejecuta la orden en MT5 y se envía alerta a Telegram con todos los detalles técnicos y de riesgo. Todo queda registrado en logs.
 6. **Monitoreo y Logging**: Logs detallados por módulo. Métricas clave: señales diarias, win rate, profit factor, drawdown, ratio SL/TP.
 
@@ -301,18 +305,19 @@ black .
 
 
 ### Estrategia "Signal Flow Optimized" (SFO)
+
+### Estrategia "Signal Flow Optimized" (SFO)
 - **Validación progresiva**: Solo se requiere 1 condición técnica para generar señal.
-- **Scoring flexible**: Señales con score ≥ 40/100.
-- **Umbrales técnicos**:
-  - ATR mínimo: 0.0003
-  - ADX mínimo: 6.0
-  - RSI compra: 35-52, venta: 48-65
-- **Gestión de riesgo**:
-  - SL: 1.0 × ATR
-  - TP: 1.6 × ATR
-  - Breakeven: 0.6 × ATR
-  - Máximo 1% de balance por operación
+- **Scoring flexible**: Señales con score ≥ 0.8 (score normalizado 0-1).
+- **Umbrales técnicos actualizados**:
+  - ADX mínimo: 8
+  - Spread máximo: 12
+  - ATR mínimo: 0.001
+  - SL: 1.25 × ATR
+  - TP: 1.7 × ATR
+  - Score de confianza mínimo: 0.8
   - Máximo 4 posiciones abiertas, 1 por símbolo
+  - Riesgo por operación: 0.6% (ajustable)
 
 
 ### Condiciones de Entrada BUY
@@ -320,14 +325,14 @@ black .
 - EMA 20 cruza hacia arriba a EMA 50 (detección expandida, ventana de 3 barras)
 - RSI > 35 o divergencia alcista
 - Patrón de vela alcista (engulfing/pin bar)
-- ADX > 6.0 (mercado con fuerza)
+- ADX ≥ 8 (mercado con fuerza)
 
 ### Condiciones de Entrada SELL
 - Precio por debajo de EMA 200 (filtro de tendencia)
 - EMA 20 cruza hacia abajo a EMA 50 (detección expandida, ventana de 3 barras)
 - RSI < 65 o divergencia bajista
 - Patrón de vela bajista (engulfing/pin bar)
-- ADX > 6.0 (mercado con fuerza)
+- ADX ≥ 8 (mercado con fuerza)
 
 
 ### Métricas de Éxito Proyectadas

@@ -9,6 +9,8 @@ from typing import Dict, List, Optional
 import schedule
 import os
 from dotenv import load_dotenv
+from env_loader import load_env
+load_env()
 
 # Import custom modules
 from mt5_connector import MT5Connector, OrderRequest
