@@ -41,7 +41,7 @@ class TradeDatabase:
         self._init_db()
 
     def _init_db(self) -> None:
-        """Inicializa la base de datos y las tablas si no existen."""
+        """Inicializa la base de datos y las tablas si no existen. Si falta la columna 'emocional', la agrega."""
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             # Tabla de señales
@@ -62,6 +62,13 @@ class TradeDatabase:
                     generation_params TEXT
                 );
             """)
+
+            # Verificar si la columna 'emocional' existe, si no, agregarla
+            c.execute("PRAGMA table_info(signals);")
+            columns = [row[1] for row in c.fetchall()]
+            if 'emocional' not in columns:
+                c.execute("ALTER TABLE signals ADD COLUMN emocional INTEGER DEFAULT 0;")
+                conn.commit()
 
             # Tabla de operaciones reales
             c.execute("""
@@ -130,6 +137,12 @@ class TradeDatabase:
             if 'generation_params' not in columns:
                 try:
                     c.execute("ALTER TABLE signals ADD COLUMN generation_params TEXT")
+                except Exception as e:
+                    print(f"[DB MIGRATION] Error: {e}")
+            # Agregar columna 'emocional' si falta
+            if 'emocional' not in columns:
+                try:
+                    c.execute("ALTER TABLE signals ADD COLUMN emocional INTEGER DEFAULT 0;")
                 except Exception as e:
                     print(f"[DB MIGRATION] Error: {e}")
             conn.commit()

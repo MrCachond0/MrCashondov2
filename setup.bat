@@ -45,13 +45,13 @@ echo         Setup Complete!
 echo ========================================
 echo.
 REM Ejecutar instalador interactivo para datos personales
-echo [5/5] Ejecutando instalador interactivo...
-python setup_installer.py
-if %errorlevel% neq 0 (
-    echo ERROR: Fallo la configuración interactiva.
-    pause
-    exit /b 1
-)
+echo [5/5] Instalador interactivo será ejecutado por el usuario final en la primera ejecución del bot.
+REM python setup_installer.py
+REM if %errorlevel% neq 0 (
+REM     echo ERROR: Fallo la configuración interactiva.
+REM     pause
+REM     exit /b 1
+REM )
 
 echo.
 echo ========================================

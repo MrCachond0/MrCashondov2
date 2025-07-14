@@ -1,7 +1,11 @@
+
 """
 Main Trading Bot Module - Mr.Cashondo
 Automated FOREX trading bot with scalping and day trading strategies
 """
+
+# === IMPORTS NECESARIOS ===
+import os
 
 # === AUTO UPDATE SYSTEM ===
 import subprocess
