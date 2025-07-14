@@ -88,12 +88,41 @@ celerybeat-schedule
 
 # Environments
 .env
+.env.*
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+.env.user
+.env.enc
+.env.key
+README_DEV.md
+dist/
+build/
+*.spec
+*.log
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.manifest
+*.dll
+*.exe
+*.zip
+*.tar.gz
+*.bak
+*.tmp
+*.swp
+*.swo
+*~
+backtest_results/
+historical_data/
+trade_logs/
 
 # Spyder project settings
 .spyderproject
