@@ -4,6 +4,7 @@ Handles position sizing, risk calculation, and trade management
 """
 import logging
 import math
+import numpy as np
 from typing import Dict, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,12 +28,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RiskParameters:
     """Risk management parameters optimized for SFO strategy"""
-    max_risk_per_trade: float = 0.008  # SFO: Reducido de 1% a 0.8%
-    max_daily_loss: float = 0.04  # SFO: Reducido de 5% a 4%
-    max_open_positions: int = 3  # Por defecto 3 para coincidir con los tests
-    min_risk_reward_ratio: float = 1.3  # SFO: Reducido de 1.5 a 1.3 (más permisivo)
-    breakeven_multiplier: float = 0.8  # SFO: Reducido de 1.2 a 0.8 (breakeven más temprano)
-    trailing_stop_multiplier: float = 0.8  # SFO: Reducido de 1.0 a 0.8 (trailing más ajustado)
+    max_risk_per_trade: float = 0.02  # 2% del balance/margen (ajustado para scalping/day trading)
+    max_daily_loss: float = 0.04  # 4% diario
+    max_open_positions: int = 3
+    min_risk_reward_ratio: float = 1.4  # Ratio mínimo real 1.4
+    sl_atr_multiplier: float = 1.2  # SL: mínimo 1.2 × ATR
+    tp_atr_multiplier: float = 1.7  # TP: mínimo 1.7 × ATR
+    breakeven_multiplier: float = 1.2  # Break-even a 1.2R
+    trailing_stop_multiplier: float = 1.4  # Trailing stop a 1.4R
 
 @dataclass
 class PositionSize:
@@ -44,45 +47,403 @@ class PositionSize:
     stop_loss_pips: float
 
 class RiskManager:
+    def get_exposure_limit(self, symbol_info: dict, account_info: dict) -> float:
+        """
+        Calcula el límite de exposición permitido para una operación según el tipo de instrumento.
+        FOREX: 40% del balance, Metales: 25% del balance, Índices: 20% (por defecto).
+        """
+        try:
+            balance = account_info.get('balance', 0)
+            symbol = symbol_info.get('symbol', '').upper()
+            if any(x in symbol for x in ['XAU', 'XAG', 'GOLD', 'SILVER', 'PLATINUM', 'PALLADIUM']):
+                limit_pct = 0.25  # Metales
+            elif any(x in symbol for x in ['EUR', 'USD', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD']):
+                limit_pct = 0.40  # Majors FOREX
+            else:
+                limit_pct = 0.20  # Índices u otros
+            exposure_limit = balance * limit_pct
+            logger.info(f"[RISK] Exposure limit calculado: {exposure_limit} (balance={balance}, symbol={symbol}, limit_pct={limit_pct})")
+            return exposure_limit
+        except Exception as e:
+            logger.error(f"[RISK] Error calculando exposure limit: {str(e)}")
+            return 0.0
+    def calculate_margin_required(self, symbol: str, volume: float, entry_price: float, symbol_info: dict) -> float:
+        """
+        Calcula el margen requerido para una operación dada.
+        Args:
+            symbol: Símbolo del instrumento
+            volume: Volumen de la operación
+            entry_price: Precio de entrada
+            symbol_info: Diccionario con información del símbolo (de MT5Connector)
+        Returns:
+            Margen requerido en la moneda de la cuenta
+        """
+        try:
+            contract_size = symbol_info.get('contract_size', 100000)
+            leverage = symbol_info.get('leverage', 100)
+            if leverage <= 0:
+                leverage = 100  # Valor por defecto si no está disponible
+            margin = (contract_size * volume * entry_price) / leverage
+            if margin <= 0:
+                logger.warning(f"[RISK] Margin calculado <= 0 para {symbol}. contract_size={contract_size}, volume={volume}, entry_price={entry_price}, leverage={leverage}")
+            logger.info(f"[RISK] Margin requerido para {symbol}: {margin}")
+            return margin
+        except Exception as e:
+            logger.error(f"[RISK] Error calculando margen requerido para {symbol}: {str(e)}")
+            return 0.0
+    def adjust_signal_filters(self, signal_generator, min_score: float = 0.8, min_atr: float = 0.0005, min_adx: float = 20):
+        """
+        Ajusta los filtros técnicos del generador de señales endureciendo el score mínimo y los umbrales de ATR/ADX.
+        Args:
+            signal_generator: Instancia de SignalGenerator.
+            min_score (float): Score mínimo para ejecución automática.
+            min_atr (float): Umbral mínimo de ATR para filtrar baja volatilidad.
+            min_adx (float): Umbral mínimo de ADX para filtrar mercados sin tendencia.
+        """
+        # Endurece el score mínimo
+        if hasattr(signal_generator, 'confidence_threshold'):
+            signal_generator.confidence_threshold = min_score
+            logger.info(f"Nuevo score mínimo para ejecución automática: {min_score}")
+        # Ajusta umbrales ATR y ADX si existen
+        if hasattr(signal_generator, 'min_atr_threshold'):
+            signal_generator.min_atr_threshold = min_atr
+            logger.info(f"Nuevo umbral mínimo ATR: {min_atr}")
+        if hasattr(signal_generator, 'min_adx_threshold'):
+            signal_generator.min_adx_threshold = min_adx
+            logger.info(f"Nuevo umbral mínimo ADX: {min_adx}")
+        # Si el generador usa umbrales por símbolo, sugerir ajuste en su método correspondiente
+        if hasattr(signal_generator, 'get_symbol_atr_threshold'):
+            logger.info("Revisar umbrales ATR/ADX por símbolo en SignalGenerator para coherencia con la volatilidad actual.")
+    def __init__(self, risk_params: RiskParameters = None):
+        """
+        Inicializa el gestor de riesgo y el registro de posiciones abiertas por símbolo.
+        Args:
+            risk_params (RiskParameters, opcional): Parámetros de riesgo personalizados.
+        """
+        self.risk_params = risk_params or RiskParameters()
+        # Dict[str, int]: símbolo -> cantidad de posiciones abiertas
+        self.open_positions_by_symbol = {}
+        self.positions_count = 0
+        self.daily_pnl = 0.0
+        self.consecutive_losses = 0
+        self.cooldown = False
+        self.cooldown_loss_limit = 2  # Detener tras 2 pérdidas seguidas
+    def register_trade_result(self, result: str):
+        """
+        Registra el resultado de una operación ('WIN', 'LOSS', 'BE').
+        Si hay 2 pérdidas seguidas, activa cooldown.
+        """
+        if result == 'LOSS':
+            self.consecutive_losses += 1
+            if self.consecutive_losses >= self.cooldown_loss_limit:
+                self.cooldown = True
+                logger.warning(f"[COOLDOWN] Activado tras {self.consecutive_losses} pérdidas consecutivas.")
+        elif result == 'WIN' or result == 'BE':
+            self.consecutive_losses = 0
+            self.cooldown = False
+
+    def can_trade(self) -> bool:
+        """
+        Indica si se puede operar (no en cooldown).
+        """
+        return not self.cooldown
+
+    def can_open_position(self, symbol: str) -> Tuple[bool, str]:
+        """
+        Verifica si se puede abrir una nueva posición para el símbolo dado.
+        Permite máximo 1 posición abierta por símbolo.
+        Returns:
+            (bool, str): True si se puede abrir, False y motivo si no.
+        """
+        count = self.open_positions_by_symbol.get(symbol, 0)
+        if count >= 1:
+            logger.warning(f"[RISK] Rechazo apertura: Ya existe una posición abierta para {symbol} (máximo 1 permitido)")
+            return False, f"Ya existe una posición abierta para {symbol} (máximo 1 permitido)"
+        if self.positions_count >= self.risk_params.max_open_positions:
+            logger.warning(f"[RISK] Rechazo apertura: Se alcanzó el máximo global de posiciones abiertas ({self.risk_params.max_open_positions})")
+            return False, f"Se alcanzó el máximo global de posiciones abiertas ({self.risk_params.max_open_positions})"
+        return True, "Permiso concedido"
+
+    def register_open_position(self, symbol: str):
+        """
+        Registra la apertura de una posición para el símbolo dado.
+        Limita a 1 posición por símbolo.
+        """
+        if self.open_positions_by_symbol.get(symbol, 0) >= 1:
+            logger.warning(f"[RISK] Intento de abrir más de una posición en {symbol}. Operación bloqueada.")
+            return False
+        self.open_positions_by_symbol[symbol] = 1
+        self.positions_count += 1
+        logger.info(f"[RISK] Posición registrada para {symbol}. Total posiciones abiertas: {self.positions_count}")
+        return True
+
+    def register_close_position(self, symbol: str):
+        """
+        Registra el cierre de una posición para el símbolo dado.
+        """
+        if self.open_positions_by_symbol.get(symbol, 0) > 0:
+            self.open_positions_by_symbol[symbol] = 0
+            self.positions_count = max(0, self.positions_count - 1)
+            logger.info(f"[RISK] Posición cerrada para {symbol}. Total posiciones abiertas: {self.positions_count}")
+        else:
+            logger.warning(f"[RISK] Intento de cerrar posición inexistente en {symbol}.")
+        self.positions_count = max(0, self.positions_count - 1)
+
+    def calculate_sl_tp(self, entry_price: float, atr: float, signal_type: str) -> Tuple[float, float]:
+        """
+        Calcula el Stop Loss y Take Profit óptimos según los nuevos multiplicadores ATR y ratio mínimo.
+        Args:
+            entry_price: Precio de entrada de la operación
+            atr: Valor actual del ATR
+            signal_type: 'BUY' o 'SELL'
+        Returns:
+            (stop_loss, take_profit)
+        """
+        params = self.risk_params
+        sl_dist = params.sl_atr_multiplier * atr
+        tp_dist = params.tp_atr_multiplier * atr
+        # Asegura ratio mínimo
+        if tp_dist / sl_dist < params.min_risk_reward_ratio:
+            tp_dist = sl_dist * params.min_risk_reward_ratio
+        if signal_type == 'BUY':
+            stop_loss = entry_price - sl_dist
+            take_profit = entry_price + tp_dist
+        else:
+            stop_loss = entry_price + sl_dist
+            take_profit = entry_price - tp_dist
+        return stop_loss, take_profit
+
+    def manage_partial_and_trailing(self,
+                                   position_id: int,
+                                   entry_price: float,
+                                   stop_loss: float,
+                                   take_profit: float,
+                                   current_price: float,
+                                   signal_type: str,
+                                   volume: float,
+                                   close_prices: 'np.ndarray',
+                                   atr: float,
+                                   broker_api,
+                                   r_partial: float = 1.0,
+                                   r_trailing: float = 1.5,
+                                   trailing_period: int = 20) -> None:
+        """
+        Gestiona el cierre parcial y trailing stop para una posición abierta.
+        - Si el precio alcanza el TP parcial (por defecto 1R), cierra la mitad de la posición.
+        - El resto de la posición se gestiona con trailing stop estructural.
+        - Si el trailing stop es alcanzado, cierra el runner.
+
+        Args:
+            position_id (int): ID de la posición en el broker.
+            entry_price (float): Precio de entrada de la operación.
+            stop_loss (float): Nivel de stop loss inicial.
+            take_profit (float): Nivel de take profit final.
+            current_price (float): Precio actual del mercado.
+            signal_type (str): 'BUY' o 'SELL'.
+            volume (float): Volumen total de la posición.
+            close_prices (np.ndarray): Serie de precios de cierre.
+            atr (float): Valor actual del ATR.
+            broker_api: Objeto/conector para ejecutar órdenes parciales y modificar SL.
+            r_partial (float): Multiplicador de R para TP parcial (por defecto 1.0).
+            r_trailing (float): Multiplicador de R para activar trailing (por defecto 1.0).
+            trailing_period (int): Periodo para el cálculo de trailing estructural.
+        """
+        # 1. Cierre parcial si corresponde (TP1 = 1R)
+        r1 = abs(entry_price - stop_loss)
+        tp1 = entry_price + r1 if signal_type == 'BUY' else entry_price - r1
+        partial_close_done = broker_api.is_partial_closed(position_id) if hasattr(broker_api, 'is_partial_closed') else False
+        if not partial_close_done:
+            if (signal_type == 'BUY' and current_price >= tp1) or (signal_type == 'SELL' and current_price <= tp1):
+                partial_vol, runner_vol = self.split_position_for_partial(volume)
+                if broker_api.is_partial_close_allowed(position_id):
+                    broker_api.close_partial(position_id, partial_vol)
+                    logger.info(f"[PARTIAL CLOSE] Posición {position_id}: Cerrada mitad ({partial_vol}) en TP1 {current_price:.5f}")
+                    # Mover SL a break even
+                    break_even = entry_price
+                    broker_api.modify_stop_loss(position_id, break_even)
+                    logger.info(f"[BREAKEVEN] SL movido a entrada para runner de posición {position_id}")
+
+        # 2. Trailing stop para el runner (a partir de 1.5R)
+        r15 = 1.5 * abs(entry_price - stop_loss)
+        tp_trailing = entry_price + r15 if signal_type == 'BUY' else entry_price - r15
+        if (signal_type == 'BUY' and current_price >= tp_trailing) or (signal_type == 'SELL' and current_price <= tp_trailing):
+            trailing_stop = self.calculate_trailing_stop(
+                close_prices=close_prices,
+                entry_price=entry_price,
+                current_price=current_price,
+                stop_loss=stop_loss,
+                signal_type=signal_type,
+                atr=atr,
+                period=trailing_period
+            )
+            if trailing_stop is not None:
+                broker_api.modify_stop_loss(position_id, trailing_stop)
+                logger.info(f"[TRAILING] SL actualizado a {trailing_stop:.5f} para runner de posición {position_id}")
+
+        # 3. Cierre runner si SL o TP final alcanzados
+        if (signal_type == 'BUY' and (current_price <= stop_loss or current_price >= take_profit)) or \
+           (signal_type == 'SELL' and (current_price >= stop_loss or current_price <= take_profit)):
+            if broker_api.is_position_open(position_id):
+                broker_api.close_position(position_id)
+                logger.info(f"[FINAL CLOSE] Runner de posición {position_id} cerrado en {current_price:.5f}")
+
+    # ---
+    # NOTA DE USO:
+    # Este método debe ser llamado periódicamente desde el ciclo de gestión de posiciones activas (main.py),
+    # pasando el ID de la posición, precios relevantes y el objeto broker_api que implemente:
+    # - close_partial(position_id, volume)
+    # - modify_stop_loss(position_id, new_sl)
+    # - is_partial_close_allowed(position_id)
+    # - is_partial_closed(position_id)
+    # - is_position_open(position_id)
+    # - close_position(position_id)
+    #
+    # Esto asegura la integración perfecta de la lógica de cierre parcial y trailing.
     def calculate_dynamic_tp_sl(self, close_prices: np.ndarray, entry_price: float, signal_type: str, atr: float) -> Tuple[float, float]:
         """
-        Calcula SL y TP dinámicos usando ATR y estructura de mercado (fractales).
+        Calcula SL y TP dinámicos usando fractales y estructura de mercado.
+        El TP prioriza el swing high/low relevante (resistencia/soporte) más cercano.
+        Si no hay, usa múltiplo de ATR.
         """
         from signal_generator import TechnicalIndicators
         highs, lows = TechnicalIndicators.find_fractals(close_prices)
         if signal_type == 'BUY':
-            # SL: último swing low, TP: swing high o 2*ATR
+            # SL: último swing low
             swing_lows = [close_prices[i] for i in lows if close_prices[i] < entry_price]
             sl_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_lows)
             sl_atr = entry_price - 1.2 * atr
             stop_loss = max(sl_fractal, sl_atr) if swing_lows else sl_atr
-            # TP dinámico
+            # TP: resistencia/swing high más cercano por encima de entry
             swing_highs = [close_prices[i] for i in highs if close_prices[i] > entry_price]
             tp_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_highs)
             tp_atr = entry_price + 2 * atr
-            take_profit = min(tp_fractal, tp_atr) if swing_highs else tp_atr
+            # Si el swing high está demasiado lejos (>3*ATR), usar tp_atr
+            if swing_highs and abs(tp_fractal - entry_price) <= 3 * atr:
+                take_profit = tp_fractal
+            else:
+                take_profit = tp_atr
         else:
+            # SL: último swing high
             swing_highs = [close_prices[i] for i in highs if close_prices[i] > entry_price]
             sl_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_highs)
             sl_atr = entry_price + 1.2 * atr
             stop_loss = min(sl_fractal, sl_atr) if swing_highs else sl_atr
+            # TP: soporte/swing low más cercano por debajo de entry
             swing_lows = [close_prices[i] for i in lows if close_prices[i] < entry_price]
             tp_fractal = TechnicalIndicators.find_nearest_level(entry_price, swing_lows)
             tp_atr = entry_price - 2 * atr
-            take_profit = max(tp_fractal, tp_atr) if swing_lows else tp_atr
+            if swing_lows and abs(tp_fractal - entry_price) <= 3 * atr:
+                take_profit = tp_fractal
+            else:
+                take_profit = tp_atr
         return stop_loss, take_profit
 
-    def calculate_trailing_stop(self, close_prices: np.ndarray, signal_type: str, period: int = 20) -> float:
+    def calculate_trailing_stop_structural(
+        self,
+        close_prices: np.ndarray,
+        entry_price: float,
+        current_price: float,
+        stop_loss: float,
+        signal_type: str,
+        atr: float,
+        period: int = 20
+    ) -> float:
         """
-        Calcula el nivel de trailing stop usando EMA o fractales.
+        Calcula el nivel de trailing stop usando fractales recientes o EMA20.
+        El trailing solo se activa después de alcanzar 1R (precio se mueve a favor al menos el riesgo inicial).
+        Args:
+            close_prices (np.ndarray): Array de precios de cierre.
+            entry_price (float): Precio de entrada de la operación.
+            current_price (float): Precio actual.
+            stop_loss (float): SL original.
+            signal_type (str): 'BUY' o 'SELL'.
+            atr (float): Valor actual del ATR.
+            period (int): Ventana para buscar fractales y calcular EMA.
+        Returns:
+            float: Nivel sugerido para el trailing stop, o None si no corresponde moverlo.
         """
         from signal_generator import TechnicalIndicators
+        highs, lows = TechnicalIndicators.find_fractals(close_prices)
         closes_np = np.array(close_prices)
         ema = TechnicalIndicators.ema(closes_np, period)
+        risk = abs(entry_price - stop_loss)
         if signal_type == 'BUY':
-            return ema[-1]
+            # Solo trail si el precio avanzó al menos 1R
+            if current_price < entry_price + risk:
+                return None
+            # Buscar el swing low más reciente por debajo del precio actual
+            swing_lows = [close_prices[i] for i in lows if close_prices[i] < current_price]
+            trailing_fractal = TechnicalIndicators.find_nearest_level(current_price, swing_lows) if swing_lows else None
+            trailing_ema = ema[-1] if len(ema) > 0 else None
+            # El trailing más conservador (más alto)
+            trailing_stop = max(filter(lambda x: x is not None, [trailing_fractal, trailing_ema, entry_price + 0.1 * risk]))
+            # Nunca bajar el SL por debajo del entry
+            trailing_stop = max(trailing_stop, entry_price)
+            return trailing_stop if trailing_stop > stop_loss else None
         else:
-            return ema[-1]
+            if current_price > entry_price - risk:
+                return None
+            swing_highs = [close_prices[i] for i in highs if close_prices[i] > current_price]
+            trailing_fractal = TechnicalIndicators.find_nearest_level(current_price, swing_highs) if swing_highs else None
+            trailing_ema = ema[-1] if len(ema) > 0 else None
+            trailing_stop = min(filter(lambda x: x is not None, [trailing_fractal, trailing_ema, entry_price - 0.1 * risk]))
+            trailing_stop = min(trailing_stop, entry_price)
+            return trailing_stop if trailing_stop < stop_loss else None
+
+    def calculate_partial_tp(
+        self,
+        entry_price: float,
+        stop_loss: float,
+        signal_type: str,
+        r_multiple: float = 1.0
+    ) -> float:
+        """
+        Calcula el nivel de Take Profit parcial (por defecto 1R o 1.5R).
+
+        Args:
+            entry_price (float): Precio de entrada de la operación.
+            stop_loss (float): Nivel de stop loss.
+            signal_type (str): 'BUY' o 'SELL'.
+            r_multiple (float): Multiplicador de R para el TP parcial (1.0 = 1R, 1.5 = 1.5R, etc).
+
+        Returns:
+            float: Nivel de precio para el TP parcial.
+        """
+        r = abs(entry_price - stop_loss)
+        if signal_type == 'BUY':
+            return entry_price + r_multiple * r
+        else:
+            return entry_price - r_multiple * r
+
+    def calculate_trailing_stop(self, close_prices: np.ndarray, entry_price: float, current_price: float, stop_loss: float, signal_type: str, atr: float, period: int = 20) -> float:
+        """
+        Wrapper para trailing estructural. Devuelve el nuevo SL sugerido o None si no corresponde moverlo.
+        """
+        return self.calculate_trailing_stop_structural(
+            close_prices=close_prices,
+            entry_price=entry_price,
+            current_price=current_price,
+            stop_loss=stop_loss,
+            signal_type=signal_type,
+            atr=atr,
+            period=period
+        )
+    def should_take_partial_profit(self, entry_price: float, stop_loss: float, current_price: float, signal_type: str, r_multiple: float = 1.0) -> bool:
+        """
+        Determina si se debe tomar ganancia parcial (por ejemplo, en 1R o 1.5R).
+        """
+        risk = abs(entry_price - stop_loss)
+        if signal_type == 'BUY':
+            return current_price >= entry_price + r_multiple * risk
+        else:
+            return current_price <= entry_price - r_multiple * risk
+
+    def split_position_for_partial(self, volume: float) -> Tuple[float, float]:
+        """
+        Divide el volumen en dos partes para TP parcial y runner.
+        Por defecto, mitad y mitad.
+        """
+        return volume / 2, volume / 2
 
     def calculate_break_even(self, entry_price: float, stop_loss: float, signal_type: str, r_multiple: float = 1.0) -> float:
         """
@@ -347,9 +708,16 @@ class RiskManager:
         if free_margin is None or free_margin <= 0:
             logger.warning(f"[EXPOSURE LIMIT] free_margin no proporcionado o inválido, usando 0 como referencia")
             free_margin = 0.0
-        max_risk_pct = min(self.risk_params.max_risk_per_trade, 0.01)
+        # Ajuste: usar 40% para FOREX, 25% para metales, 20% para índices
+        symbol_upper = symbol.upper() if symbol else ''
+        if any(x in symbol_upper for x in ['XAU', 'XAG', 'GOLD', 'SILVER', 'PLATINUM', 'PALLADIUM']):
+            max_risk_pct = 0.25
+        elif any(x in symbol_upper for x in ['EUR', 'USD', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD']):
+            max_risk_pct = 0.40
+        else:
+            max_risk_pct = 0.20
         limit = free_margin * max_risk_pct
-        logger.info(f"[EXPOSURE LIMIT] Para {symbol}: free_margin={free_margin}, límite 1%={limit}")
+        logger.info(f"[EXPOSURE LIMIT] Para {symbol}: free_margin={free_margin}, límite {max_risk_pct*100:.0f}%={limit}")
         return limit
     def calculate_margin_buffer(self, volume: float, contract_size: float, price: float, leverage: float = 100.0, symbol: str = None, *args, **kwargs) -> float:
         """

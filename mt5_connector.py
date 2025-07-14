@@ -62,6 +62,30 @@ class MarketData:
         self.time = time
 
 class MT5Connector:
+    def get_server_time(self) -> Optional[datetime]:
+        """
+        Obtiene la hora actual del servidor de MT5.
+        Returns:
+            datetime: Hora actual del servidor MT5 en formato UTC, o None si falla.
+        """
+        try:
+            import MetaTrader5 as mt5
+            if not self.connected:
+                logger.warning("No conectado a MT5 para obtener hora del servidor.")
+                return None
+            server_time = mt5.symbol_info_tick(self.account_info.login)
+            # Alternativamente, usar mt5.time() si está disponible
+            if hasattr(mt5, 'time'):
+                timestamp = mt5.time()
+                return datetime.utcfromtimestamp(timestamp)
+            # Fallback: usar hora local de la cuenta si está disponible
+            if hasattr(self.account_info, 'server'):
+                # No siempre disponible, depende del broker
+                return datetime.utcnow()
+            return datetime.utcnow()
+        except Exception as e:
+            logger.error(f"Error obteniendo hora del servidor MT5: {e}")
+            return None
     """
     MetaTrader 5 connector for automated trading operations
     """

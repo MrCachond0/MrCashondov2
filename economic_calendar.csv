@@ -1,0 +1,6 @@
+timestamp,symbol,impact,description
+2025-07-14T12:30:00,USD,high,NFP
+2025-07-15T14:00:00,EUR,high,CPI
+2025-07-16T18:00:00,ALL,high,FOMC
+2025-07-17T09:00:00,GBP,medium,BoE Rate Decision
+2025-07-18T20:00:00,JPY,high,BoJ Press Conference

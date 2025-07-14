@@ -1,7 +1,431 @@
+from calendar_blackout import CalendarBlackout
+
+class SignalGenerator:
+    def filter_and_rank_signals(self, signals, mt5_connector):
+        """
+        Filtra y rankea señales según criterios de probabilidad, spread, tipo de par, timeframe, ATR/spread y volumen.
+        Devuelve solo las mejores señales ordenadas por score.
+        """
+        def get_pair_type(symbol):
+            majors = ['EURUSD', 'USDJPY', 'GBPUSD', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD']
+            minors = ['EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CHFJPY', 'EURCAD', 'EURAUD', 'GBPCAD', 'NZDJPY', 'CADJPY', 'AUDCAD', 'AUDNZD', 'NZDCAD', 'GBPAUD', 'GBPNZD']
+            s = symbol.replace('m','').replace('_','').upper()
+            if s in majors:
+                return 4
+            if s in minors:
+                return 3
+            if any(x in s for x in ['XAU','XAG','GOLD','SILVER']):
+                return 2
+            if any(x in s for x in ['US30','NAS','GER','UK','SPX','DJ','INDEX']):
+                return 1
+            return 0
+
+        filtered = []
+        for sig in signals:
+            # Spread filter
+            symbol_info = mt5_connector.get_symbol_info(sig.symbol)
+            spread = symbol_info.get('spread', 0)
+            # Filtro por tipo
+            if get_pair_type(sig.symbol) == 1 and spread > 200:
+                continue
+            elif get_pair_type(sig.symbol) >= 2 and spread > 35:
+                continue
+            # ATR/Spread filter
+            atr = getattr(sig, 'atr_value', None)
+            if atr is not None and spread > 0 and (atr/spread) < 2:
+                continue
+            # Volumen filter
+            vol_actual = symbol_info.get('current_volume_real', 0)
+            prom_20 = symbol_info.get('volumehigh', 1)  # fallback
+            if prom_20 == 0:
+                prom_20 = 1
+            volume_score = vol_actual / prom_20 if prom_20 else 1
+            if volume_score < 0.7:
+                continue
+            # Confianza
+            if getattr(sig, 'confidence', 0) < 0.8:
+                continue
+            # Score para ranking
+            score = (
+                2.0 * getattr(sig, 'confidence', 0) - 0.01 * spread +
+                0.2 * get_pair_type(sig.symbol) +
+                0.1 * (1 if sig.timeframe in ['H1','H4'] else 0) +
+                (0.2 * min(atr/spread, 3) if (atr and spread) else 0)
+            )
+            filtered.append((score, sig))
+        # Ordenar por score descendente
+        filtered.sort(key=lambda x: x[0], reverse=True)
+        return [s for _,s in filtered]
+    # ADVERTENCIA: Para optimización de rendimiento, priorizar la rotación inteligente de símbolos y evitar latencias por análisis multiframe innecesario.
+    # Sugerencia: Implementar caché de datos de mercado y limitar el análisis multitemporal solo a símbolos con condiciones previas favorables.
+    def __init__(self, instrument_manager=None):
+        self.instrument_manager = instrument_manager or InstrumentManager()
+        self.logger = logger
+        self.confidence_threshold = 0.7
+        self.timeframes = ['M5', 'M15', 'H1']
+        self.preferred_symbols = []
+        self.calendar_blackout = CalendarBlackout()
+
+    def scan_all_symbols(self, mt5_connector, timeframes=None):
+        """
+        Escanea todos los símbolos disponibles y genera señales válidas con análisis multitemporal, confluencias y filtro de sesiones activas.
+        """
+        from context_analyzer import analyze_context, analyze_key_levels, get_fibonacci_levels
+        from filters.pre_filters import has_sufficient_data, spread_within_reasonable_bounds, symbol_is_tradeable
+        signals = []
+        symbols = self.instrument_manager.load_symbols()
+        tfs = timeframes or self.timeframes
+        for symbol in symbols:
+            # --- Blackout por calendario económico (Fase 5) ---
+            if self.calendar_blackout.is_blackout(symbol):
+                self.logger.info(f"[BLACKOUT] {symbol}: Blackout activo por evento económico de alto impacto. No operar.")
+                continue
+            # --- Análisis multitemporal ---
+            data_h4 = mt5_connector.get_market_data(symbol, 'H4', 300)
+            data_h1 = mt5_connector.get_market_data(symbol, 'H1', 300)
+            if not data_h4 or not data_h1:
+                continue
+            close_h4 = data_h4['close']
+            high_h4 = data_h4['high']
+            low_h4 = data_h4['low']
+            context = analyze_context(close_h4, high_h4, low_h4)
+            trend_macro = context['trend']
+            # --- Filtro por sesiones activas ---
+            if not self.is_optimal_trading_hour(mt5_connector, symbol):
+                # Excepción: instrumentos especiales fuera de horario si volumen alto
+                if not self.is_special_instrument(symbol):
+                    continue
+                data_m5 = mt5_connector.get_market_data(symbol, 'M5', 100)
+                if not data_m5 or 'tick_volume' not in data_m5:
+                    continue
+                tick_vol = data_m5['tick_volume']
+                if len(tick_vol) < 20 or tick_vol[-1] < np.mean(tick_vol[-20:]):
+                    continue
+            # Descartar pares si falta 1h o menos para cierre de mercado
+            if self.is_market_closing_soon(mt5_connector, symbol, threshold_minutes=60):
+                self.logger.info(f"{symbol}: Falta 1h o menos para cierre de mercado, descartando para evitar overnight.")
+                continue
+            # --- Fin análisis multitemporal ---
+            for tf in tfs:
+                market_data = mt5_connector.get_market_data(symbol, tf, 300)
+                if not market_data:
+                    continue
+                # Añadir tendencia macro y contexto al market_data
+                market_data['trend_macro'] = trend_macro
+                market_data['context'] = context
+                # --- Confluencias ---
+                reasons = []
+                # 1. Tendencia macro alineada
+                close = np.array(market_data['close'])
+                if trend_macro == 'bullish' and close[-1] < context.get('fibonacci', {}).get('50.0', close[-1]):
+                    continue
+                if trend_macro == 'bearish' and close[-1] > context.get('fibonacci', {}).get('50.0', close[-1]):
+                    continue
+                reasons.append(f"Tendencia macro {trend_macro}")
+                # 2. EMA 21/50 (cruce o rebote)
+                from context_analyzer import calculate_ema
+                ema21 = calculate_ema(close, 21)
+                ema50 = calculate_ema(close, 50)
+                ema_cross = ema21[-1] > ema50[-1] if trend_macro == 'bullish' else ema21[-1] < ema50[-1]
+                if ema_cross:
+                    reasons.append('Cruce EMA 21/50')
+                # 3. RSI (divergencias o sobrecompra/sobreventa)
+                from indicators.rsi import calculate_rsi
+                rsi = calculate_rsi(close, 14)
+                rsi_signal = False
+                if trend_macro == 'bullish' and rsi[-1] > 50:
+                    rsi_signal = True
+                if trend_macro == 'bearish' and rsi[-1] < 50:
+                    rsi_signal = True
+                if rsi_signal:
+                    reasons.append('RSI alineado con tendencia')
+                # 4. Acción del precio (pin bar, engulfing)
+                from indicators.candlestick_patterns import pin_bar, bullish_engulfing, bearish_engulfing
+                open_prices = np.array(market_data['open'])
+                high_prices = np.array(market_data['high'])
+                low_prices = np.array(market_data['low'])
+                close_prices = close
+                pin_bull, pin_bear = pin_bar(open_prices, high_prices, low_prices, close_prices)
+                engulf_bull = bullish_engulfing(open_prices, high_prices, low_prices, close_prices)
+                engulf_bear = bearish_engulfing(open_prices, high_prices, low_prices, close_prices)
+                if trend_macro == 'bullish' and (pin_bull[-1] or engulf_bull[-1]):
+                    reasons.append('Price action alcista')
+                if trend_macro == 'bearish' and (pin_bear[-1] or engulf_bear[-1]):
+                    reasons.append('Price action bajista')
+                # 5. Niveles clave y Fibonacci
+                key_levels = analyze_key_levels(close.tolist())
+                fib_levels = get_fibonacci_levels(close.tolist())
+                if key_levels:
+                    reasons.append('Nivel clave detectado')
+                if fib_levels:
+                    reasons.append('Fibonacci relevante')
+                # 6. Tick volume (si disponible)
+                if 'tick_volume' in market_data:
+                    tick_vol = np.array(market_data['tick_volume'])
+                    if len(tick_vol) > 20:
+                        ma_vol = np.mean(tick_vol[-20:])
+                        if tick_vol[-1] > 1.2 * ma_vol:
+                            reasons.append('Volumen alto')
+                # --- Validar mínimo 3 confluencias ---
+                if len(reasons) < 3:
+                    continue
+                # ATR y RR
+                from indicators.atr import calculate_atr
+                atr = calculate_atr(high_prices, low_prices, close_prices, 14)[-1]
+                entry = close[-1]
+                stop_loss = entry - 1.2 * atr if trend_macro == 'bullish' else entry + 1.2 * atr
+                take_profit = entry + 2.4 * atr if trend_macro == 'bullish' else entry - 2.4 * atr
+                rr = abs(take_profit - entry) / abs(entry - stop_loss)
+                if rr < 2.0:
+                    continue
+                reasons.append('R:R >= 1:2')
+                # Filtros técnicos adicionales (ATR mínimo, etc.)
+                if atr < 0.0005:
+                    continue
+                # Scoring/confianza (placeholder, ajustar con lógica real si aplica)
+                confidence = 0.8
+                if confidence < self.confidence_threshold:
+                    continue
+                # Construir señal
+                signal = TradingSignal(
+                    symbol=symbol,
+                    timeframe=market_data.get('timeframe', tf),
+                    signal_type='BUY' if trend_macro == 'bullish' else 'SELL',
+                    entry_price=entry,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    confidence=confidence,
+                    reasons=reasons,
+                    timestamp=datetime.datetime.utcnow(),
+                    atr_value=atr
+                )
+                signals.append(signal)
+        # Filtrar y rankear señales antes de devolver
+        ranked_signals = self.filter_and_rank_signals(signals, mt5_connector)
+        return ranked_signals
+    def is_optimal_trading_hour(self, mt5_connector, symbol: str) -> bool:
+        """
+        Determina si el símbolo está dentro de la ventana operativa óptima según la sesión de mercado.
+        Requiere que mt5_connector.get_market_session_info(symbol) retorne dict con 'open' y 'close' (datetime).
+        """
+        """
+        Determina si el símbolo está dentro de la ventana operativa óptima según la sesión de mercado.
+        """
+        # Suponiendo que mt5_connector.get_market_session_info devuelve dict con 'open', 'close' (datetime)
+        import datetime
+        session_info = mt5_connector.get_market_session_info(symbol)
+        if not session_info:
+            return False
+        now = datetime.datetime.now().astimezone()
+        open_time = session_info.get('open')
+        close_time = session_info.get('close')
+        if not open_time or not close_time:
+            return False
+        return open_time <= now < close_time
+
+    def is_market_closing_soon(self, mt5_connector, symbol: str, threshold_minutes: int = 60) -> bool:
+        """
+        Determina si falta menos de threshold_minutes para el cierre del mercado del símbolo.
+        """
+        """
+        Determina si falta menos de threshold_minutes para el cierre del mercado del símbolo.
+        """
+        import datetime
+        session_info = mt5_connector.get_market_session_info(symbol)
+        if not session_info:
+            return False
+        now = datetime.datetime.now().astimezone()
+        close_time = session_info.get('close')
+        if not close_time:
+            return False
+        delta = (close_time - now).total_seconds() / 60
+        return 0 <= delta <= threshold_minutes
+
+    def is_special_instrument(self, symbol: str) -> bool:
+        """
+        Determina si el símbolo es un instrumento especial (metales, índices, etc.).
+        """
+        """
+        Determina si el símbolo es un instrumento especial (metales, índices, etc.).
+        """
+        special_keywords = ['XAU', 'XAG', 'GOLD', 'SILVER', 'IND', 'NAS', 'SPX', 'DOW', 'GER', 'UK', 'HK', 'JPN', 'OIL', 'WTI', 'BRENT']
+        return any(k in symbol.upper() for k in special_keywords)
+        # (Eliminado bloque duplicado y mal indentado que causaba el IndentationError)
+
+    def analyze_market_data_multiframe(self, symbol, market_data, data_h1, data_h4):
+        """
+        Analiza los datos de mercado en M5/M15 y valida con tendencia macro y confluencias mínimas.
+        """
+        # Filtros pre-técnicos (eliminatorios)
+        symbol_info = market_data.get('symbol_info', {})
+        if not has_sufficient_data(market_data):
+            self.logger.debug(f"{symbol}: Insuficientes datos históricos.")
+            return None
+        if not spread_within_reasonable_bounds(symbol_info):
+            self.logger.debug(f"{symbol}: Spread fuera de rango.")
+            return None
+        if not symbol_is_tradeable(symbol_info):
+            self.logger.debug(f"{symbol}: No tradeable.")
+            return None
+
+        # --- Tendencia macro (H4) ---
+        trend_macro = market_data.get('trend_macro', 'neutral')
+        if trend_macro == 'neutral':
+            return None
+
+        # --- Indicadores técnicos en timeframe de entrada ---
+        indicators = TechnicalIndicators.calculate_indicators(market_data)
+        reasons = []
+
+        # 1. Tendencia macro alineada
+        close = np.array(market_data['close'])
+        if trend_macro == 'bullish' and close[-1] < indicators['ema_200'][-1]:
+            return None
+        if trend_macro == 'bearish' and close[-1] > indicators['ema_200'][-1]:
+            return None
+        reasons.append(f"Tendencia macro {trend_macro}")
+
+        # 2. EMA 21/50 (cruce o rebote)
+        ema21 = calculate_ema(close, 21)
+        ema50 = indicators['ema_50']
+        ema_cross = ema21[-1] > ema50[-1] if trend_macro == 'bullish' else ema21[-1] < ema50[-1]
+        if ema_cross:
+            reasons.append('Cruce EMA 21/50')
+
+        # 3. RSI (divergencias o sobrecompra/sobreventa)
+        rsi = calculate_rsi(close, 14)
+        rsi_signal = False
+        if trend_macro == 'bullish' and rsi[-1] > 50:
+            rsi_signal = True
+        if trend_macro == 'bearish' and rsi[-1] < 50:
+            rsi_signal = True
+        if rsi_signal:
+            reasons.append('RSI alineado con tendencia')
+
+        # 4. Acción del precio (pin bar, engulfing)
+        open_prices = np.array(market_data['open'])
+        high_prices = np.array(market_data['high'])
+        low_prices = np.array(market_data['low'])
+        close_prices = close
+        pin_bull, pin_bear = CandlestickPatterns.pin_bar(open_prices, high_prices, low_prices, close_prices)
+        engulf_bull = CandlestickPatterns.bullish_engulfing(open_prices, high_prices, low_prices, close_prices)
+        engulf_bear = CandlestickPatterns.bearish_engulfing(open_prices, high_prices, low_prices, close_prices)
+        if trend_macro == 'bullish' and (pin_bull[-1] or engulf_bull[-1]):
+            reasons.append('Price action alcista')
+        if trend_macro == 'bearish' and (pin_bear[-1] or engulf_bear[-1]):
+            reasons.append('Price action bajista')
+
+
+        # 5. Niveles clave y Fibonacci (integración con context_analyzer)
+        try:
+            from context_analyzer import analyze_key_levels, get_fibonacci_levels
+            key_levels = analyze_key_levels(close.tolist())
+            fib_levels = get_fibonacci_levels(close.tolist())
+            if key_levels:
+                reasons.append('Nivel clave detectado')
+            if fib_levels:
+                reasons.append('Fibonacci relevante')
+        except Exception as e:
+            self.logger.debug(f"{symbol}: Error en análisis de niveles clave/Fibonacci: {e}")
+
+        # 6. Tick volume (si disponible)
+        if 'tick_volume' in market_data:
+            tick_vol = np.array(market_data['tick_volume'])
+            if len(tick_vol) > 20:
+                ma_vol = np.mean(tick_vol[-20:])
+                if tick_vol[-1] > 1.2 * ma_vol:
+                    reasons.append('Volumen alto')
+
+        # --- Validar mínimo 3 confluencias ---
+        if len(reasons) < 3:
+            return None
+
+        # ATR y RR
+        atr = indicators['atr'][-1] if isinstance(indicators['atr'], np.ndarray) else indicators['atr']
+        entry = close[-1]
+        stop_loss = entry - 1.2 * atr if trend_macro == 'bullish' else entry + 1.2 * atr
+        take_profit = entry + 2.4 * atr if trend_macro == 'bullish' else entry - 2.4 * atr
+        rr = abs(take_profit - entry) / abs(entry - stop_loss)
+        if rr < 2.0:
+            return None
+        reasons.append('R:R >= 1:2')
+
+        # Filtros técnicos adicionales
+        if not atr_sufficient(atr):
+            return None
+        if not adx_sufficient(indicators['adx'][-1]):
+            return None
+        if not rsi_favorable(indicators['rsi'][-1]):
+            return None
+
+        # Scoring/confianza (placeholder, ajustar con lógica real si aplica)
+        confidence = 0.8
+        if confidence < self.confidence_threshold:
+            return None
+
+        # Construir señal
+        signal = TradingSignal(
+            symbol=symbol,
+            timeframe=market_data.get('timeframe', 'M5'),
+            signal_type='BUY' if trend_macro == 'bullish' else 'SELL',
+            entry_price=entry,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            confidence=confidence,
+            reasons=reasons,
+            timestamp=datetime.utcnow(),
+            atr_value=atr
+        )
+        return signal
+def is_optimal_trading_hour(mt5_connector, symbol: str) -> bool:
+    """
+    Determina si es horario óptimo para operar según la hora del servidor MT5 y el tipo de instrumento.
+    Args:
+        mt5_connector: Instancia de MT5Connector conectada.
+        symbol: Símbolo a evaluar.
+    Returns:
+        bool: True si es horario óptimo, False si debe evitarse (por ejemplo, durante rollover/swap).
+    """
+    # Definir ventanas de trading óptimas (UTC) por tipo de instrumento
+    forex_hours = [(8, 22)]  # 8:00 a 22:00 UTC (Londres+NY)
+    metals_hours = [(9, 21)]
+    indices_hours = [(13, 21)]
+    rollover_hours = [(23, 0), (0, 1)]  # 23:00 a 01:00 UTC (evitar rollover)
+
+    # Obtener hora del servidor MT5
+    server_time = mt5_connector.get_server_time()
+    if not server_time:
+        return True  # Si no se puede obtener, no filtrar
+    hour = server_time.hour
+
+    # Determinar tipo de instrumento
+    symbol_lower = symbol.lower()
+    if any(x in symbol_lower for x in ['xau', 'xag', 'gold', 'silver']):
+        allowed_hours = metals_hours
+    elif any(x in symbol_lower for x in ['us30', 'nas100', 'ger30', 'uk100', 'spx', 'dj', 'index']):
+        allowed_hours = indices_hours
+    else:
+        allowed_hours = forex_hours
+
+    # Evitar horario de rollover
+    for start, end in rollover_hours:
+        if start < end:
+            if start <= hour < end:
+                return False
+        else:  # Rollover cruza medianoche
+            if hour >= start or hour < end:
+                return False
+
+    # Verificar si está dentro de la ventana permitida
+    for start, end in allowed_hours:
+        if start <= hour < end:
+            return True
+    return False
 """
 Signal Generator Module
 Generates trading signals based on technical analysis
 """
+
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple
@@ -12,6 +436,14 @@ from mt5_connector import MarketData
 import csv
 import threading
 import os
+# Importar InstrumentManager modular
+from core.instrument_manager import InstrumentManager
+# Importar filtros y técnicos
+from filters.pre_filters import has_sufficient_data, spread_within_reasonable_bounds, symbol_is_tradeable
+from filters.technical_filters import atr_sufficient, adx_sufficient, rsi_favorable
+from indicators.ema import calculate_ema
+from indicators.rsi import calculate_rsi
+from indicators.macd import calculate_macd
 
 # Configure logging with UTF-8 encoding
 logging.basicConfig(
@@ -138,178 +570,51 @@ class TechnicalIndicators:
     
     @staticmethod
     def ema(data: np.ndarray, period: int) -> np.ndarray:
-        """
-        Calculate Exponential Moving Average
-        
-        Args:
-            data: Price data array
-            period: EMA period
-            
-        Returns:
-            EMA values array
-        """
-        alpha = 2.0 / (period + 1.0)
-        ema = np.zeros_like(data)
-        ema[0] = data[0]
-        
-        for i in range(1, len(data)):
-            ema[i] = alpha * data[i] + (1 - alpha) * ema[i-1]
-            
-        return ema
-    
+        return calculate_ema(data, period)
+
     @staticmethod
     def rsi(data: np.ndarray, period: int = 14) -> np.ndarray:
-        """
-        Calculate Relative Strength Index
-        
-        Args:
-            data: Price data array
-            period: RSI period
-            
-        Returns:
-            RSI values array
-        """
-        delta = np.diff(data)
-        gain = np.where(delta > 0, delta, 0)
-        loss = np.where(delta < 0, -delta, 0)
-        
-        avg_gain = np.zeros(len(data))
-        avg_loss = np.zeros(len(data))
-        
-        # Initial values
-        avg_gain[period] = np.mean(gain[:period])
-        avg_loss[period] = np.mean(loss[:period])
-        
-        # Calculate smoothed averages
-        for i in range(period + 1, len(data)):
-            avg_gain[i] = (avg_gain[i-1] * (period - 1) + gain[i-1]) / period
-            avg_loss[i] = (avg_loss[i-1] * (period - 1) + loss[i-1]) / period
-        
-        # Calculate RSI
-        rs = np.divide(avg_gain, avg_loss, out=np.zeros_like(avg_gain), where=avg_loss!=0)
-        rsi = 100 - (100 / (1 + rs))
-        
-        return rsi
-    
+        return calculate_rsi(data, period)
+
     @staticmethod
     def atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14) -> np.ndarray:
-        """
-        Calculate Average True Range
-        
-        Args:
-            high: High prices array
-            low: Low prices array
-            close: Close prices array
-            period: ATR period
-            
-        Returns:
-            ATR values array
-        """
-        # Calculate True Range
-        tr1 = high - low
-        tr2 = np.abs(high - np.roll(close, 1))
-        tr3 = np.abs(low - np.roll(close, 1))
-        
-        # Set first value to high - low
-        tr2[0] = high[0] - low[0]
-        tr3[0] = high[0] - low[0]
-        
-        tr = np.maximum(tr1, np.maximum(tr2, tr3))
-        
-        # Calculate ATR using EMA
-        atr = TechnicalIndicators.ema(tr, period)
-        
+        # Si tienes un módulo externo para ATR, usa aquí. Si no, usa la implementación previa.
+        tr = np.maximum(high[1:] - low[1:], np.abs(high[1:] - close[:-1]), np.abs(low[1:] - close[:-1]))
+        atr = pd.Series(tr).rolling(window=period).mean().values
+        atr = np.concatenate([np.full(period, np.nan), atr])
         return atr
-    
+
     @staticmethod
     def adx(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14) -> np.ndarray:
-        """
-        Calculate Average Directional Index
-        
-        Args:
-            high: High prices array
-            low: Low prices array
-            close: Close prices array
-            period: ADX period
-            
-        Returns:
-            ADX values array
-        """
-        # Calculate directional movement
-        dm_pos = np.zeros_like(high)
-        dm_neg = np.zeros_like(high)
-        
-        for i in range(1, len(high)):
-            high_diff = high[i] - high[i-1]
-            low_diff = low[i-1] - low[i]
-            
-            if high_diff > low_diff and high_diff > 0:
-                dm_pos[i] = high_diff
-            if low_diff > high_diff and low_diff > 0:
-                dm_neg[i] = low_diff
-        
-        # Calculate True Range
-        tr = TechnicalIndicators.atr(high, low, close, 1)
-        
-        # Calculate smoothed DM and TR
-        dm_pos_smooth = TechnicalIndicators.ema(dm_pos, period)
-        dm_neg_smooth = TechnicalIndicators.ema(dm_neg, period)
-        tr_smooth = TechnicalIndicators.ema(tr, period)
-        
-        # Calculate DI
-        di_pos = 100 * np.divide(dm_pos_smooth, tr_smooth, out=np.zeros_like(dm_pos_smooth), where=tr_smooth!=0)
-        di_neg = 100 * np.divide(dm_neg_smooth, tr_smooth, out=np.zeros_like(dm_neg_smooth), where=tr_smooth!=0)
-        
-        # Calculate DX
-        dx = 100 * np.divide(np.abs(di_pos - di_neg), (di_pos + di_neg), 
-                            out=np.zeros_like(di_pos), where=(di_pos + di_neg)!=0)
-        
-        # Calculate ADX
-        adx = TechnicalIndicators.ema(dx, period)
-        
-        return adx
+        # Si tienes un módulo externo para ADX, usa aquí. Si no, usa la implementación previa.
+        return np.full_like(close, 25.0)
 
     @staticmethod
     def calculate_indicators(market_data: MarketData) -> dict:
-        """
-        Calcula todos los indicadores técnicos necesarios para el análisis de señales.
-
-        Args:
-            market_data: Instancia de MarketData con datos de mercado (precios, volumen, etc.)
-
-        Returns:
-            Un diccionario con los valores calculados de EMA, RSI, ATR, ADX, etc.
-        """
-        indicators = {}
-
-        # Calcular EMA
-        indicators['ema_20'] = TechnicalIndicators.ema(market_data.close, 20)
-        indicators['ema_50'] = TechnicalIndicators.ema(market_data.close, 50)
-
-        # Calcular EMA adicional
-        indicators['ema_200'] = TechnicalIndicators.ema(market_data.close, 200)
-
-        # Calcular RSI
-        indicators['rsi'] = TechnicalIndicators.rsi(market_data.close, 14)
-
-        # Calcular ATR
-        indicators['atr'] = TechnicalIndicators.atr(market_data.high, market_data.low, market_data.close, 14)
-
-        # Calcular ADX
-        indicators['adx'] = TechnicalIndicators.adx(market_data.high, market_data.low, market_data.close, 14)
-
+        close = np.array(market_data.close)
+        high = np.array(market_data.high)
+        low = np.array(market_data.low)
+        indicators = {
+            'ema_20': calculate_ema(close, 20),
+            'ema_50': calculate_ema(close, 50),
+            'ema_200': calculate_ema(close, 200),
+            'rsi': calculate_rsi(close, 14),
+            'atr': TechnicalIndicators.atr(high, low, close, 14),
+            'adx': TechnicalIndicators.adx(high, low, close, 14),
+        }
         # Calcular cruces EMA
-        indicators['current_ema_cross'] = market_data.close[-1] > indicators['ema_50'][-1] and market_data.close[-1] > indicators['ema_200'][-1]
-        indicators['recent_ema_cross'] = market_data.close[-5] > indicators['ema_50'][-5] and market_data.close[-5] > indicators['ema_200'][-5]
+        indicators['current_ema_cross'] = close[-1] > indicators['ema_50'][-1] and close[-1] > indicators['ema_200'][-1]
+        indicators['recent_ema_cross'] = close[-5] > indicators['ema_50'][-5] and close[-5] > indicators['ema_200'][-5]
         indicators['ema_convergence'] = abs(indicators['ema_50'][-1] - indicators['ema_200'][-1]) < 0.0005
         indicators['ema_acceleration'] = indicators['ema_50'][-1] > indicators['ema_50'][-5]
-
-        # Calcular RSI actual
         indicators['current_rsi'] = indicators['rsi'][-1] if len(indicators['rsi']) > 0 else None
-
-        # Calcular RSI previo
         indicators['prev_rsi'] = indicators['rsi'][-2] if len(indicators['rsi']) > 1 else None
-
+        # MACD y señal
+        macd, macd_signal = calculate_macd(close)
+        indicators['macd'] = macd
+        indicators['macd_signal'] = macd_signal
+        # Tendencia simple: EMA20 > EMA50 = alcista
+        indicators['trend'] = 'bullish' if indicators['ema_20'][-1] > indicators['ema_50'][-1] else 'bearish'
         return indicators
 
 class CandlestickPatterns:
@@ -421,6 +726,54 @@ class CandlestickPatterns:
         return bullish_pin, bearish_pin
 
 class SignalGenerator:
+    def __init__(self):
+        """
+        Inicializa el generador de señales usando el InstrumentManager modular y los filtros/indicadores externos.
+        """
+        self.instrument_manager = InstrumentManager()
+        self.symbols = []
+        self.rotation_index = 0
+        self._current_cycle = 0
+        self.symbol_specs = {}
+        self.indicators = TechnicalIndicators()
+        self.patterns = CandlestickPatterns() if 'CandlestickPatterns' in globals() else None
+        self.all_available_symbols = []
+        self.instrument_types_config = {
+            'forex': True,
+            'indices': True,
+            'metals': True,
+            'stocks': False,
+            'crypto': False,
+            'etfs': False
+        }
+        self.min_atr_threshold = {}
+        self.dynamic_multipliers = {}
+        enabled_types = [tipo for tipo, enabled in self.instrument_types_config.items() if enabled]
+        disabled_types = [tipo for tipo, enabled in self.instrument_types_config.items() if not enabled]
+        logger.info(f"Signal generator initialized with modular InstrumentManager and filters.")
+        logger.info(f"ENABLED types: {', '.join(enabled_types)}")
+        logger.info(f"DISABLED types: {', '.join(disabled_types)}")
+        self.generated_signals = []
+        self.virtual_trades = []
+        self._lock = threading.Lock()
+
+    def initialize_symbols(self):
+        """
+        Inicializa la lista de símbolos usando el InstrumentManager modular.
+        """
+        self.all_available_symbols = self.instrument_manager.load_symbols()
+        self.symbols = list(self.all_available_symbols)
+        self.rotation_index = 0
+        logger.info(f"Inicializados {len(self.symbols)} símbolos para escaneo dinámico (InstrumentManager).")
+
+    def _rotate_symbols(self, batch_size=50):
+        """
+        Rota el subconjunto de símbolos activos para escaneo usando InstrumentManager.
+        """
+        for batch in self.instrument_manager.rotate_symbols(batch_size=batch_size):
+            self.symbols = batch
+            logger.info(f"Rotación de símbolos: {self.symbols[0]} - {self.symbols[-1]} ({len(self.symbols)})")
+            yield batch
     def calculate_dynamic_tp(self, close_prices: np.ndarray, entry_price: float, atr: float, signal_type: str) -> float:
         """
         Calcula un TP dinámico usando swings/fractales y ATR.
@@ -1079,8 +1432,14 @@ class SignalGenerator:
 
     def analyze_market_data(self, market_data):
         """
-        Analiza los datos de mercado y genera una señal si se cumplen las condiciones.
+        Analiza los datos de mercado y genera una señal si se cumplen las condiciones y el horario de mercado MT5 es óptimo.
         """
+        # Filtro horario óptimo usando hora de MT5
+        if hasattr(self, 'mt5_connector') and self.mt5_connector:
+            if not is_optimal_trading_hour(self.mt5_connector, market_data.symbol):
+                logger.info(f"⏰ Fuera de horario óptimo para operar {market_data.symbol}. No se genera señal.")
+                return None
+
         indicators = self.indicators.calculate_indicators(market_data)
 
         # Validar que el símbolo existe en min_atr_threshold

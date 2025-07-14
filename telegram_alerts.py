@@ -13,7 +13,7 @@ from signal_generator import TradingSignal
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+    # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -23,55 +23,41 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
 class TelegramAlerts:
-    """
-    Telegram bot for sending trading alerts and notifications
-    """
-    
     def __init__(self):
-        """Initialize Telegram bot"""
-        self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-        self.chat_ids = self._get_chat_ids()
-        
-        if not self.bot_token:
-            logger.error("TELEGRAM_BOT_TOKEN not found in environment variables")
-            raise ValueError("TELEGRAM_BOT_TOKEN not found")
-        
-        if not self.chat_ids:
-            logger.error("No TELEGRAM_CHAT_ID found in environment variables")
-            raise ValueError("No TELEGRAM_CHAT_ID found")
-        
         try:
+            self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+            self.chat_ids = self._get_chat_ids()
             test_env = os.getenv('TEST_ENV', 'false').lower() == 'true'
             if test_env:
                 self.bot = None
                 logger.info("Telegram bot initialization skipped in test environment.")
             else:
-                if ':' not in self.bot_token:
-                    logger.error("Invalid TELEGRAM_BOT_TOKEN format. Token must contain a colon.")
-                    raise ValueError("Invalid TELEGRAM_BOT_TOKEN format")
+                if not self.bot_token or ':' not in self.bot_token:
+                    logger.error("Invalid TELEGRAM_BOT_TOKEN format.")
+                    raise ValueError("Invalid TELEGRAM_BOT_TOKEN format.")
+                import telebot
                 self.bot = telebot.TeleBot(self.bot_token)
                 logger.info("Telegram bot initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Telegram bot: {str(e)}")
             raise
-    
+        if not self.chat_ids:
+            logger.error("No TELEGRAM_CHAT_ID found in environment variables")
+            raise ValueError("No TELEGRAM_CHAT_ID found")
+
     def _get_chat_ids(self) -> List[str]:
         """
-        Get chat IDs from environment variables
-        
+        Obtiene todos los chat IDs de las variables de entorno (.env), incluyendo el principal y los adicionales.
         Returns:
             List of chat IDs
         """
         chat_ids = []
-        
-        # Get main chat ID
+        # Chat ID principal
         main_chat_id = os.getenv('TELEGRAM_CHAT_ID')
         if main_chat_id:
             chat_ids.append(main_chat_id)
-        
-        # Get additional chat IDs
+        # Chat IDs adicionales
         i = 1
         while True:
             chat_id = os.getenv(f'TELEGRAM_CHAT_ID_{i}')
@@ -80,19 +66,31 @@ class TelegramAlerts:
                 i += 1
             else:
                 break
-        
+        return chat_ids
+        # Chat IDs adicionales
+        i = 1
+        while True:
+            chat_id = os.getenv(f'TELEGRAM_CHAT_ID_{i}')
+            if chat_id:
+                chat_ids.append(chat_id)
+                i += 1
+            else:
+                break
         return chat_ids
     
     def send_signal_alert(self, signal: TradingSignal) -> bool:
         """
-        Envía SIEMPRE la señal a Telegram, sin importar si será ejecutada en MT5 o no.
-        Args:
-            signal: TradingSignal object
-        Returns:
-            True if sent successfully, False otherwise
+        Envía la señal a todos los chat IDs configurados en .env, incluyendo contexto, confluencias y tendencia macro (Fase 6).
         """
         try:
             message = self._format_signal_message(signal)
+            # Añadir contexto extra si está disponible
+            if hasattr(signal, 'confluencias'):
+                message += f"\n<b>Confluencias:</b> {signal.confluencias}"
+            if hasattr(signal, 'tendencia_macro'):
+                message += f"\n<b>Tendencia macro:</b> {signal.tendencia_macro}"
+            if hasattr(signal, 'context'):
+                message += f"\n<b>Contexto:</b> {signal.context}"
             success = True
             for chat_id in self.chat_ids:
                 try:
@@ -353,7 +351,7 @@ class TelegramAlerts:
             logger.info(f"Bot connected: {bot_info.username}")
             
             # Test sending message to all chat IDs
-            test_message = "💸🤖 <b>Test Message</b>\n\n💸Mr.CashondoV2🧠 Inicializado Correctamente! 💹Happy Trading💱!!"
+            test_message = "💸🤖 <b>Mr.CashondoV2</b>🤖💸\n\n🧠 Inicializado Correctamente!\n\n💹 Happy Trading!!"
             
             for chat_id in self.chat_ids:
                 try:

@@ -39,18 +39,18 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM Check if .env file exists
-echo [5/5] Checking configuration...
-if not exist .env (
-    echo WARNING: .env file not found.
-    echo Please copy .env.example to .env and configure your credentials.
-    copy .env.example .env
-    echo.
-    echo .env file created from template.
-    echo Please edit .env with your actual credentials before running the bot.
+echo.
+echo ========================================
+echo         Setup Complete!
+echo ========================================
+echo.
+REM Ejecutar instalador interactivo para datos personales
+echo [5/5] Ejecutando instalador interactivo...
+python setup_installer.py
+if %errorlevel% neq 0 (
+    echo ERROR: Fallo la configuración interactiva.
     pause
-) else (
-    echo .env file found.
+    exit /b 1
 )
 
 echo.

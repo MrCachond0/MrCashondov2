@@ -1,190 +1,196 @@
-# Mr.Cashondo Trading Bot
+## Actualización automática (Auto-Update)
+El bot incluye un sistema de auto-actualización:
 
-## Descripción
-Mr.Cashondo es un bot de trading automatizado para FOREX, índices y metales, con gestión de riesgo avanzada y alertas por Telegram. El bot realiza escaneos periódicos de todos los símbolos disponibles y ejecuta operaciones según señales generadas por algoritmos propios.
+- Cada vez que se ejecuta, compara la versión local (`version.txt`) con la versión remota en GitHub.
+- Si hay una nueva versión, descarga y reemplaza los archivos automáticamente.
+- El usuario solo debe reiniciar el bot tras una actualización.
 
-## Flujo de Ejecución Actualizado
-1. **Validación de Suscripción:**
-   - Al iniciar el bot, se solicita el correo y token de suscripción SOLO UNA VEZ por ejecución.
-   - La validación se realiza contra una base de datos en Supabase.
-   - Si la suscripción es válida, el bot continúa; si no, se detiene.
-2. **Inicialización de Componentes:**
-   - Conexión a MetaTrader 5 (MT5) usando los datos de cuenta, password y servidor.
-   - Inicialización de generador de señales, gestor de riesgo y alertas de Telegram.
-3. **Escaneo y Ejecución:**
-   - El bot escanea TODOS los símbolos de FOREX, índices y metales configurados en la cuenta MT5.
-   - Procesa señales, ejecuta operaciones y gestiona posiciones activas.
-4. **Alertas y Reportes:**
-   - Envía alertas de señales y ejecuciones a Telegram.
-   - Envía resumen diario y notificaciones de errores críticos.
+**Importante:** Si modificas el código, actualiza el número de versión en `version.txt` antes de subir a GitHub.
 
-## Instalación y Uso
+## Cómo crear el ejecutable (.exe) para distribución
 
-### Requisitos
+1. Asegúrate de tener `pyinstaller` instalado:
+   ```powershell
+   pip install pyinstaller
+   ```
+2. Desde la raíz del proyecto, ejecuta:
+   ```powershell
+   pyinstaller --onefile --add-data ".env.enc;." --add-data ".env.key;." --add-data "EULA.txt;." --add-data "README.md;." --add-data "version.txt;." --hidden-import cryptography --name MrCashondoBot main.py
+   ```
+3. El ejecutable estará en la carpeta `dist/` como `MrCashondoBot.exe`.
+
+**Nota:** Si usas dependencias adicionales, agrégalas con `--add-data` o `--hidden-import` según sea necesario.
+
+## Flujo de actualización para el usuario final
+
+1. El usuario ejecuta el bot normalmente.
+2. Si hay una nueva versión en GitHub, el bot la descarga y reemplaza los archivos.
+3. El usuario solo debe reiniciar el bot para aplicar la actualización.
+## Instalación y configuración rápida
+1. **Descarga y descomprime** el paquete de MrCashondoV2 en una carpeta de tu PC.
+2. **Ejecuta** el archivo `setup.bat` (doble clic). Esto instalará todo lo necesario automáticamente y lanzará el instalador interactivo.
+3. El instalador solo te pedirá tus datos personales: Chat ID de Telegram, credenciales de MT5, email y token de suscripción. El resto de la configuración ya está cifrada y protegida.
+4. Acepta el EULA cuando se muestre en pantalla.
+5. **Ejecuta** el archivo `run_bot.bat` para iniciar el bot.
+
+## Seguridad y protección
+- **Tus datos personales** se guardan en `.env.user`.
+- **Tokens y claves sensibles** (TELEGRAM_BOT_TOKEN, SUPABASE_URL, SUPABASE_API_KEY) ya están cifrados y embebidos en el ejecutable, nunca se exponen ni se solicitan al usuario final.
+- El código fuente del ejecutable está ofuscado y protegido con PyArmor.
+
+## ¿Cómo funciona?
+- El bot analiza automáticamente los mercados habilitados (FOREX, metales, índices) y ejecuta operaciones según su estrategia.
+- Recibirás alertas y reportes automáticos por Telegram sobre las operaciones y el estado del bot.
+- La gestión de riesgo es configurable y centralizada: puedes elegir arriesgar un monto fijo en USD por operación o un porcentaje de tu balance (por defecto, 2% por operación y exposición máxima de 40% para FOREX, 25% para metales, 20% para índices; puedes modificarlo en `risk_config.py`).
+- El bot solo funcionará si tu suscripción está activa y los datos ingresados son correctos.
+
+## Requisitos previos
 - Windows 10/11
 - MetaTrader 5 instalado
 - Python 3.10+ (solo para desarrollo o ejecución directa)
 - Cuenta activa y suscripción válida
+- Git instalado (opcional, para clonar el repo)
 
-
-### Instalación y Uso
-
-1. Clona el repositorio.
+## Instalación y configuración inicial (modo desarrollador)
+1. Clona el repositorio:
+   ```powershell
+   git clone https://github.com/MrCachond0/MrCashondov2.git
+   cd MrCashondov2
+   ```
 2. Ejecuta el script de instalación automática:
-   ```bat
+   ```powershell
    setup.bat
    ```
-   Esto instalará todas las dependencias necesarias en un entorno virtual y creará el archivo `.env` si no existe.
-3. Edita el archivo `.env` con tus credenciales y claves de API.
-4. Para ejecutar el bot:
-   ```bat
-   run_bot.bat
-   ```
-5. Para limpiar y reinstalar dependencias:
-   ```bat
-   clean_setup.bat
-   ```
-6. Para correr los tests:
-   ```bat
-   run_tests.bat
-   ```
+   Esto instalará todas las dependencias necesarias en un entorno virtual y lanzará el instalador interactivo para tus datos personales.
+3. El resto de la configuración ya está cifrada y lista para usarse.
 
-## Seguridad y Protección
-- El instalador .exe cifrará los archivos críticos y credenciales.
-- El código fuente estará ofuscado y protegido contra ingeniería inversa.
-- La validación de suscripción es obligatoria y se realiza en cada inicio.
+## Distribución como ejecutable (.exe)
+El bot puede distribuirse como ejecutable protegido usando PyInstaller + PyArmor. El usuario solo debe descargar el `.exe`, ejecutarlo, aceptar el EULA e ingresar sus datos personales cuando se le solicite.
 
 ## Soporte
-Para soporte técnico o problemas con la suscripción, contacta al desarrollador.
+Si tienes dudas o necesitas ayuda, contacta al soporte oficial de MrCashondoV2 o crea un Issue en GitHub.
 
+**¡Disfruta de tu trading automatizado con MrCashondoV2!**
 
-![MIT License](https://img.shields.io/badge/license-MIT-green.svg)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+- 🔎 Escaneo periódico de todos los símbolos configurados (FOREX, metales, índices; acciones y cripto opcional)
+- 📈 Generación de señales basada en indicadores técnicos (EMA, RSI, ATR, ADX, MACD, volumen, price action, patrones de velas, etc.)
+- 🤖 Ejecución automática de operaciones en MT5 con control de riesgo (monto fijo en USD o porcentaje)
+- 🗃️ Registro de todas las señales y operaciones en base de datos SQLite, incluyendo:
+  - 🟢 Trades ejecutados (con actualización automática de estado: TP, SL, BE, trailing, abierto, etc.)
+  - 🧬 Parámetros de generación de cada señal (para futuros estudios y machine learning)
+- 📤 Exportación de toda la base de datos a CSV para análisis externo
+- 📲 Alertas y reportes automáticos por Telegram
+- 📝 Logs detallados por módulo para trazabilidad y debugging
+- 🔒 Seguridad: credenciales cifradas y validadas, EULA obligatorio, código protegido en el instalador
 
-# Mr. Cashondo - Bot de Trading Automatizado Multi-Instrumento
+## 🏗️ Arquitectura Modular y Estructura de Carpetas
 
-## � Resumen End-to-End (2025)
-
-Mr. Cashondo es un bot profesional de trading automático, modular y multi-instrumento, enfocado en scalping y day trading en FOREX, metales e índices, con gestión de riesgo avanzada y monitoreo en tiempo real.
-
----
-
-## 🏗️ Arquitectura Modular
-
-```
+```text
 MrCashondo/
-├── main.py              # Ciclo principal, orquestador del bot
-├── mt5_connector.py     # Conexión y ejecución de órdenes en MetaTrader 5
-├── signal_generator.py  # Generación y filtrado de señales técnicas
-├── risk_manager.py      # Cálculo de lotaje y control de riesgo
-├── telegram_alerts.py   # Envío de alertas a Telegram
+├── main.py                # Orquestador principal del bot
+├── mt5_connector.py       # Conexión y ejecución de órdenes en MetaTrader 5
+├── signal_generator.py    # Generación y filtrado de señales técnicas
+├── risk_manager.py        # Cálculo de lotaje y control de riesgo
+├── telegram_alerts.py     # Envío de alertas a Telegram
+├── trade_database.py      # Registro y consulta de señales, trades y trades virtuales
 ├── configure_instruments.py # Configuración dinámica de instrumentos
-├── test_*.py            # Tests unitarios y de integración (pytest)
-├── .env                 # Variables de entorno (credenciales y configuración)
-├── *.log                # Logs detallados de cada módulo
+├── export_tocsv.py        # Exporta todas las tablas de la base de datos a CSV
+├── core/                  # Lógica modular (config, logger, instrument_manager)
+├── alerts/                # Módulos de alertas
+├── filters/               # Filtros técnicos
+├── indicators/            # Indicadores técnicos (ej: macd.py)
+├── scripts/               # Scripts auxiliares
+├── tests/                 # Tests unitarios y de integración (pytest)
+├── .env.enc / .env.key    # Credenciales cifradas (solo desarrollo: .env)
+├── *.log                  # Logs detallados de cada módulo
+├── requirements.txt       # Dependencias principales
+├── requirements_installer.txt # Dependencias para el instalador protegido
 ```
 
+## 🔄 Flujo End-to-End
+
+1. 🛡️ **Validación de Suscripción y Seguridad:**
+   - Al iniciar el bot, se solicita el correo y token de suscripción SOLO UNA VEZ por ejecución.
+   - Se valida la suscripción vía Supabase (Stripe) y se verifica la integridad de los archivos críticos.
+   - Si la suscripción es válida, el bot continúa; si no, se detiene y lo notifica.
+
+2. ⚙️ **Inicialización de Componentes:**
+   - Conexión a MetaTrader 5 (MT5) usando credenciales cifradas.
+   - Inicialización de:
+     - Generador de señales con análisis multitemporal (H4/H1 para contexto, M5 para entradas)
+     - Filtros de volatilidad (ATR bajo en M5, spread máximo por activo) y de sesión (solo mercados activos, evita exposición overnight)
+     - Sistema de blackout económico (evita operar durante noticias de alto impacto, configurable por CSV/API)
+     - Gestor de riesgo avanzado (cálculo de lotaje, cooldown tras pérdidas, trailing stop, break even, parcialidades, RR dinámico, límites diarios)
+     - Base de datos y sistema de post-trade review automático
+     - Alertas de Telegram con contexto completo
+
+3. 🔍 **Escaneo, Análisis y Ejecución:**
+   - El bot escanea periódicamente todos los símbolos configurados (FOREX, metales, índices, acciones, ETFs).
+   - Para cada símbolo:
+     - Realiza análisis multitemporal y calcula mínimo 3 confluencias técnicas (tendencia macro, EMA, RSI, MACD, price action, volumen)
+     - Aplica filtros de volatilidad y sesión; si hay blackout económico, descarta operar ese símbolo
+     - Si la señal cumple criterios, ejecuta la operación en MT5 con control de riesgo y registra el trade
+   - El estado de cada trade (real y virtual) se actualiza automáticamente según la evolución del precio (TP, SL, BE, trailing, abierto, etc.)
+   - TODAS las señales (ejecutadas o no) se registran como "trades virtuales" para análisis de performance y machine learning.
+
+4. 📢 **Alertas y Reportes:**
+   - Envía alertas detalladas a Telegram con:
+     - Confluencias activas, tendencia macro, hora y sesión, contexto del trade
+     - Estado de ejecución, errores críticos y resumen diario
+
+5. 🧪 **Post-Trade Review y Clasificación:**
+   - Cada operación queda registrada con:
+     - Hora, sesión, tendencia macro, confluencias activas, razón de entrada, clasificación (`alta_probabilidad`, `media`, `baja`, `emocional`)
+     - Screenshot (si MT5 API lo permite) o string descriptivo
+   - El sistema etiqueta automáticamente operaciones fuera de sesión o sin criterios completos como `emocional`.
+
+6. 📊 **Exportación y Análisis:**
+   - Exporta todas las tablas de la base de datos a CSV para análisis externo, backtesting o machine learning.
+   - Permite análisis de performance, scoring de señales, optimización futura y auditoría de todas las señales generadas.
+
 ---
 
-## 🚦 Flujo End-to-End
-
-1. **Inicialización**: Carga de variables de entorno y configuración de instrumentos. Conexión a MetaTrader 5 usando credenciales del `.env`.
-2. **Rotación y Escaneo**: Rotación entre ~370 símbolos (FOREX, metales, índices). Analiza 50 símbolos por ciclo (cada 30 segundos aprox.). Filtros pre-técnicos eliminan símbolos inoperables (spread, volumen, datos insuficientes).
-3. **Generación de Señales**: Filtros técnicos y scoring flexible (score mínimo 0.8, filtros endurecidos: ADX ≥ 8, spread ≤ 12, ATR mínimo 0.001, SL 1.25×ATR, TP 1.7×ATR). Detección expandida de cruces EMA, RSI, ATR, ADX y patrones de velas. Se genera una señal por cada oportunidad válida, sin límite artificial de cantidad (el límite real es la gestión de riesgo y posiciones abiertas).
-4. **Gestión de Riesgo**: Cálculo de lotaje y SL/TP usando el balance y ATR. Límites: máximo 4 posiciones abiertas globales, 1 por símbolo, máximo 0.6% de riesgo por operación (ajustable en risk_config.py).
-5. **Ejecución y Notificación**: Si la señal pasa todos los filtros, se ejecuta la orden en MT5 y se envía alerta a Telegram con todos los detalles técnicos y de riesgo. Todo queda registrado en logs.
-6. **Monitoreo y Logging**: Logs detallados por módulo. Métricas clave: señales diarias, win rate, profit factor, drawdown, ratio SL/TP.
+## 🛡️ Seguridad y Protección
+- 🔑 El instalador .exe cifra los archivos críticos y credenciales.
+- 🛡️ El código fuente está ofuscado y protegido contra ingeniería inversa (PyArmor).
+- 🧩 **Diversificación**: FOREX + Metales + Índices + Acciones
+- **Variables de entorno**: Nunca subas tu archivo `.env`, `.env.enc` ni `.env.key` a ningún repositorio ni los compartas.
+- **EULA**: Debes aceptar el Acuerdo de Licencia antes de usar el bot.
+- **Logs seguros**: No se registra información sensible.
+- **Validación de entrada**: Todos los inputs son validados.
+- **Límites de riesgo**: Múltiples capas de protección.
 
 ---
 
-# Mr. Cashondo - Bot de Trading Automatizado Multi-Instrumento
-
-🧠 **Bot de Trading Profesional** diseñado ## 📊 Instrumentos Monitoreados
-
-### 🎛️ Configuración de Instrumentos (NUEVA FUNCIONALIDAD)
-- **Sistema configurable**: Habilitar/deshabilitar tipos de instrumentos dinámicamente
-- **Configuración actual**: ✅ FOREX, ✅ Índices, ✅ Metales | ❌ Acciones, ❌ Crypto, ❌ ETFs (temporal)
-- **Cambio en tiempo real**: Sin necesidad de reiniciar el bot
-- **Configurador incluido**: Script `configure_instruments.py` para gestión fácil
-
-### Configuración Actual (Predeterminada)
-- ✅ **FOREX**: Todos los pares de divisas habilitados
-- ✅ **Metales Preciosos**: Oro, plata, platino, paladio habilitados
-- ✅ **Índices Bursátiles**: US30, US500, NAS100, GER30, UK100, etc. habilitados
-- ❌ **Acciones**: DESHABILITADO permanentemente
-- ❌ **Criptomonedas**: DESHABILITADO permanentemente
-- ❌ **ETFs**: DESHABILITADO permanentemente
-
-### Sistema de Rotación Multi-Instrumento
-- **Sistema dinámico**: Analiza instrumentos según configuración activa
-- **Rotación inteligente**: Procesa 50 símbolos por ciclo para optimizar memoria
-- **Cobertura completa**: Incluye solo instrumentos habilitados
-- **Símbolos preferidos**: Prioriza instrumentos de alta liquidez en cada rotación
-
-### Categorías de Instrumentos Disponibles
-- **FOREX (~37 pares)**: Majors, minors, crosses y exóticos
-- **Metales Preciosos (~4)**: Oro, plata, platino, paladio
-- **Índices Internacionales**: US30, US500, NAS100, GER30, UK100, AUS200
-- **Acciones Principales**: AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META (deshabilitadas)
-- **Criptomonedas**: BTC, ETH, LTC, XRP, ADA (deshabilitadas) **TODOS los mercados disponibles en MetaTrader 5** con estrategias de scalping y day trading completamente automatizadas.
-
-## 🚀 Características Principales
-
-- **Conexión MetaTrader 5**: Integración completa con MT5 para ejecución automática
-- **Análisis Multi-Instrumento Configurable**: FOREX, metales, índices, acciones y ETFs
-- **Sistema de Rotación**: Gestiona miles de símbolos mediante rotación inteligente
-- **Configuración de Instrumentos**: Habilitar/deshabilitar tipos de instrumentos dinámicamente
-- **Análisis Técnico Avanzado**: Utiliza EMA, RSI, ATR, ADX y patrones de velas
-- **Filtros Adaptativos**: Sistema de filtros dinámicos por volatilidad y tendencia
-- **Gestión de Riesgo**: Control automático de riesgo con máximo 1% por operación
-- **Alertas Telegram**: Notificaciones en tiempo real de señales y ejecuciones
-- **Logging Detallado**: Seguimiento completo de decisiones y análisis
-- **Arquitectura Modular**: Código limpio y mantenible siguiendo mejores prácticas
-- **Compatibilidad Windows**: Optimizado para sistemas Windows con encoding UTF-8
-
-
-## 📋 Requisitos
+## 📋 Dependencias principales
 
 - Python 3.10+
-- MetaTrader 5 instalado en Windows
-- Cuenta de trading (demo o real)
-- Bot de Telegram configurado
-- Git instalado (para clonar y subir el proyecto)
+- MetaTrader5
+- pyTelegramBotAPI
+- python-dotenv
+- pandas
+- numpy
+- schedule
+- pytest
+- black
+- cryptography (solo si usas `.env.enc`)
 
-
-## � Subida inicial a GitHub
-
-1. **Inicializa el repositorio y sube el código**
-```powershell
-cd "ruta/del/proyecto/MrCashondo"
-git init
-git add .
-git commit -m "Add initial Mr. Cashondo trading bot project"
-git branch -M main
-git remote add origin https://github.com/MrCachond0/MrCashondov2.git
-git push -u origin main
-```
-
-## �🔧 Instalación y configuración
+## Instalación manual avanzada
 
 1. **Clona el repositorio**
-```powershell
-git clone https://github.com/MrCachond0/MrCashondov2.git
-cd MrCashondov2
-```
-
+   ```powershell
+   git clone https://github.com/MrCachond0/MrCashondov2.git
+   cd MrCashondov2
+   ```
 2. **Crea el entorno virtual**
-```powershell
-python -m venv venv
-venv\Scripts\activate
-```
-
+   ```powershell
+   python -m venv venv
+   venv\Scripts\activate
+   ```
 3. **Instala dependencias**
-```powershell
-pip install -r requirements.txt
-```
-
-
+   ```powershell
+   pip install -r requirements.txt
+   ```
 4. **Configura las variables de entorno**
    - Copia `.env.example` a `.env`
    - Completa con tus credenciales reales:
@@ -205,7 +211,6 @@ pip install -r requirements.txt
 ## 🔑 Control de suscripciones (Supabase + Stripe)
 
 El bot valida tu suscripción antes de operar. Debes tener un email registrado y activo en la base de datos de Supabase (se activa automáticamente al pagar por Stripe).
-
 Al iniciar el bot, se te pedirá tu email de suscripción (o lo puedes dejar en `.env`).
 Si la suscripción está activa, el bot funcionará normalmente. Si no, se bloqueará y mostrará un mensaje de error.
 
@@ -214,43 +219,30 @@ Si la suscripción está activa, el bot funcionará normalmente. Si no, se bloqu
 - El bot consulta la API `/validate?email=...` antes de operar.
 - Si la suscripción está activa, permite el uso; si no, lo bloquea.
 
-5. **Configuración rápida en Windows**
-   - Ejecuta `setup.bat` para instalar todo automáticamente.
-   - Para limpiar y reinstalar, usa `clean_setup.bat`.
+**Scripts útiles**
+- `run_bot.bat`: Ejecuta el bot con entorno virtual y chequeos previos.
+- `run_tests.bat`: Ejecuta los tests con pytest.
 
-6. **Scripts útiles**
-   - `run_bot.bat`: Ejecuta el bot con entorno virtual y chequeos previos.
-   - `run_tests.bat`: Ejecuta los tests con pytest.
 ## 📂 Estructura de archivos principal
 
-| Archivo/Carpeta              | Descripción                                      |
-|------------------------------|--------------------------------------------------|
-| main.py                      | Ciclo principal y orquestador del bot            |
-| mt5_connector.py             | Conexión y ejecución de órdenes en MetaTrader 5  |
-| signal_generator.py          | Generación y filtrado de señales técnicas        |
-| risk_manager.py              | Cálculo de lotaje y control de riesgo            |
-| telegram_alerts.py           | Envío de alertas a Telegram                      |
-| configure_instruments.py     | Configuración dinámica de instrumentos           |
-| trade_database.py            | Registro y consulta de señales/operaciones       |
-| export_tocsv.py              | Exporta base de datos a CSV                      |
-| test_*.py                    | Tests unitarios e integración (pytest)           |
-| .env.example                 | Plantilla de variables de entorno                |
-| requirements.txt             | Dependencias del proyecto                        |
-| *.log                        | Logs detallados de cada módulo                   |
-| exports/                     | Exportaciones de señales y trades                |
+Ver sección "Arquitectura Modular y Estructura de Carpetas" arriba para el detalle completo.
+
 ## ⚠️ Configuración de riesgo
 
 El bot soporta dos modos de gestión de riesgo:
 
-- `percent_margin`: Arriesga un % del balance/margen libre (modo clásico)
+- `percent_margin`: Arriesga un % del balance/margen libre (modo clásico, por defecto)
 - `fixed_usd`: Arriesga SIEMPRE el mismo monto en USD por operación (recomendado para cuentas pequeñas)
 
 Configura esto en `risk_config.py`:
 ```python
-RISK_MODE = "fixed_usd"   # o "percent_margin"
+RISK_MODE = "percent_margin"   # o "fixed_usd"
 FIXED_RISK_USD = 1.0      # Cambia este valor al monto deseado en USD
+MAX_RISK_PER_TRADE = 0.02 # 2% por operación (solo para percent_margin)
 ```
 El cambio es inmediato y no requiere reiniciar el bot.
+Para más detalles, consulta `README_risk_config.md`.
+
 ## 📤 Exportar base de datos a CSV
 
 Puedes exportar todas las señales y operaciones a CSV con:
@@ -258,11 +250,13 @@ Puedes exportar todas las señales y operaciones a CSV con:
 python export_tocsv.py
 ```
 Los archivos se guardan en la carpeta `exports/` con timestamp.
+
 ## ❓ Preguntas frecuentes (FAQ)
 
 **¿Por qué no se generan señales?**
 - Es normal si los filtros técnicos no se cumplen. Revisa los logs para ver el motivo exacto.
 - El mercado puede estar en baja volatilidad o fuera de horario óptimo.
+- Verifica que los símbolos pasen los filtros ATR, ADX, volumen y scoring.
 
 **¿Cómo cambio el riesgo por operación?**
 - Edita `risk_config.py` y ajusta `FIXED_RISK_USD` o cambia el modo a `percent_margin`.
@@ -276,39 +270,24 @@ Los archivos se guardan en la carpeta `exports/` con timestamp.
 **¿Qué hago si tengo errores de conexión MT5?**
 - Verifica credenciales y que MetaTrader 5 esté abierto y conectado.
 
+**¿Por qué el bot entra en cooldown y no opera?**
+- Si hay 2 pérdidas consecutivas, el sistema activa un cooldown temporal para proteger el capital.
+
 **¿Cómo contribuyo?**
 - Haz fork, crea una rama, realiza tus cambios y abre un Pull Request.
+
 ## 📝 Notas importantes
 
-- **Nunca subas tu archivo `.env` real ni credenciales a GitHub.**
+- **Nunca subas tu archivo `.env`, `.env.enc` ni credenciales a GitHub.**
 - El bot está optimizado para Windows, pero puede adaptarse a Linux/Mac con cambios menores.
 - Usa siempre entorno virtual para evitar conflictos de dependencias.
 
-## 🏃‍♂️ Uso
-
-### Ejecutar el bot
-```bash
-python main.py
-```
-
-### Ejecutar tests
-```bash
-pytest test_bot.py -v
-```
-
-### Formatear código
-```bash
-black .
-```
-
 ## 📈 Estrategias Implementadas
-
-
-### Estrategia "Signal Flow Optimized" (SFO)
 
 ### Estrategia "Signal Flow Optimized" (SFO)
 - **Validación progresiva**: Solo se requiere 1 condición técnica para generar señal.
 - **Scoring flexible**: Señales con score ≥ 0.8 (score normalizado 0-1).
+- **Validación multiframe**: Confirmación de tendencia en M15, entrada en M5.
 - **Umbrales técnicos actualizados**:
   - ADX mínimo: 8
   - Spread máximo: 12
@@ -319,122 +298,55 @@ black .
   - Máximo 4 posiciones abiertas, 1 por símbolo
   - Riesgo por operación: 0.6% (ajustable)
 
+#### Condiciones de Entrada BUY (actualizadas)
+- Precio por encima de EMA 200 (M15)
+- EMA 20 cruza hacia arriba la EMA 50 (M5)
+- RSI (14) entre 50 y 70 con pendiente positiva
+- MACD línea rápida cruzando sobre línea lenta por debajo de 0
+- Volumen actual > promedio móvil de volumen (últimas 10 velas)
+- Patrón de vela alcista (Engulfing, Marubozu o Pin Bar con mecha larga inferior)
+- Vela de entrada debe cerrar por encima de EMA 20
 
-### Condiciones de Entrada BUY
-- Precio por encima de EMA 200 (filtro de tendencia)
-- EMA 20 cruza hacia arriba a EMA 50 (detección expandida, ventana de 3 barras)
-- RSI > 35 o divergencia alcista
-- Patrón de vela alcista (engulfing/pin bar)
-- ADX ≥ 8 (mercado con fuerza)
+#### Condiciones de Entrada SELL (actualizadas)
+- Precio por debajo de EMA 200 (M15)
+- EMA 20 cruza hacia abajo la EMA 50 (M5)
+- RSI (14) entre 30 y 50 con pendiente negativa
+- MACD línea rápida cruzando debajo de la lenta por encima de 0
+- Volumen actual > promedio móvil de volumen (últimas 10 velas)
+- Patrón de vela bajista (Engulfing, Marubozu o Pin Bar con mecha larga superior)
+- Vela de entrada debe cerrar por debajo de EMA 20
 
-### Condiciones de Entrada SELL
-- Precio por debajo de EMA 200 (filtro de tendencia)
-- EMA 20 cruza hacia abajo a EMA 50 (detección expandida, ventana de 3 barras)
-- RSI < 65 o divergencia bajista
-- Patrón de vela bajista (engulfing/pin bar)
-- ADX ≥ 8 (mercado con fuerza)
-
-
-### Métricas de Éxito Proyectadas
+#### Métricas de Éxito Proyectadas
 - **Señales diarias**: 10-20 (según condiciones de mercado)
-- **Win rate objetivo**: 60-65%
+- **Win rate objetivo**: 65-70%
 - **Profit factor**: 1.4-1.8
 - **Máximo drawdown**: 12%
 - **Ratio riesgo/recompensa**: 1:1.4
 
-
-### Monitoreo Diario
+#### Monitoreo Diario
 - **Generación de señales**: Mínimo esperado: 8, óptimo: 12-18, máximo: 25
 - **Calidad de ejecución**: Slippage <0.0003, ejecución <2s, tasa de llenado >95%
 - **Riesgo**: VAR diario <2%, correlación <0.3, exposición máxima <2.4%
 
 ## 🏗️ Arquitectura
 
-```
-MrCashondo/
-├── main.py              # Módulo principal del bot
-├── mt5_connector.py     # Conexión y órdenes MT5
-├── signal_generator.py  # Generación de señales
-├── risk_manager.py      # Gestión de riesgo
-├── telegram_alerts.py   # Alertas Telegram
-├── test_bot.py         # Tests unitarios
-├── requirements.txt    # Dependencias
-└── .env               # Variables de entorno
-```
+Ver sección "Arquitectura Modular y Estructura de Carpetas" arriba para el detalle completo.
 
 ## ⚙️ Configuración de Instrumentos
 
-### 🎛️ Configurar Tipos de Instrumentos
+Puedes configurar los tipos de instrumentos a analizar con el script interactivo:
 ```bash
-# Configurador interactivo
 python configure_instruments.py
-
-# Test de configuración actual
-python test_config.py
 ```
+Opciones disponibles:
+1. FOREX + Índices + Metales (recomendada)
+2. Solo FOREX
+3. FOREX + Metales
+4. FOREX + Índices
+5. Todo habilitado
+6. Configuración personalizada
 
-### 📋 Opciones de Configuración Disponibles
-1. **Configuración Actual**: FOREX + Índices + Metales (recomendada)
-2. **Solo FOREX**: Únicamente pares de divisas
-3. **FOREX + Metales**: Divisas y metales preciosos
-4. **FOREX + Índices**: Divisas e índices bursátiles
-5. **Todo Habilitado**: Todos los instrumentos disponibles
-6. **Configuración Personalizada**: Selección manual por tipo
-
-### 🔧 Configuración Programática
-```python
-from signal_generator import SignalGenerator
-
-# Crear instancia
-signal_generator = SignalGenerator()
-
-# Habilitar solo FOREX
-signal_generator.configure_instrument_types(
-    forex=True, indices=False, metals=False, stocks=False, crypto=False
-)
-
-# Habilitar FOREX + Metales + Índices (configuración actual)
-signal_generator.configure_instrument_types(
-    forex=True, indices=True, metals=True, stocks=False, crypto=False
-)
-
-# Habilitar temporalmente acciones
-signal_generator.configure_instrument_types(stocks=True)
-
-# Verificar configuración
-config = signal_generator.get_instrument_types_status()
-print(config)
-```
-
-### 🚫 Instrumentos Temporalmente Deshabilitados
-- **Acciones individuales**: Para reducir ruido y enfocarse en mercados más líquidos
-- **Criptomonedas**: Volatilidad extrema, se analizarán por separado
-- **ETFs complejos**: Filtrados automáticamente por liquidez
-
-### ✅ Beneficios de la Configuración Actual
-- **Rendimiento optimizado**: Menos símbolos = análisis más rápido
-- **Mejor calidad de señales**: Enfoque en instrumentos líquidos
-- **Gestión de riesgo**: Mercados más predecibles
-- **Flexibilidad**: Cambios sin reiniciar el sistema
-
-### Sistema de Rotación Multi-Instrumento
-- **Sistema dinámico**: Analiza TODOS los instrumentos disponibles en MT5
-- **Rotación inteligente**: Procesa 50 símbolos por ciclo para optimizar memoria
-- **Cobertura completa**: Incluye FOREX, metales, índices, acciones y ETFs
-- **Símbolos preferidos**: Prioriza instrumentos de alta liquidez en cada rotación
-
-### Categorías de Instrumentos
-- **FOREX (37 pares)**: Majors, minors, crosses y exóticos
-- **Metales Preciosos (4)**: Oro, plata, platino, paladio
-- **Índices Internacionales**: US30, US500, NAS100, GER30, UK100, AUS200
-- **Acciones Principales**: AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META
-- **ETFs y Otros**: Miles de instrumentos adicionales disponibles
-
-### Estados de Análisis
-- ✅ **Filtros pasados**: Símbolos que cumplen ATR, ADX y spread adaptativos
-- 🔄 **En rotación**: Sistema rota entre ~370 símbolos operables
-- 📊 **Diversificación**: Análisis automático de múltiples clases de activos
-- ❌ **Filtrados**: No cumplen criterios mínimos de volatilidad y liquidez
+**Nota:** Acciones individuales y ETFs están deshabilitados por defecto para reducir ruido. Criptomonedas requieren lógica aparte.
 
 ## ⚙️ Configuración Avanzada
 
@@ -474,14 +386,14 @@ risk_params = RiskParameters(
 
 ### Logs
 - `mr_cashondo_bot.log`: Log principal del bot
-- `mt5_connector.log`: Logs de conexión MT5  
+- `mt5_connector.log`: Logs de conexión MT5
 - `signal_generator.log`: Logs de generación de señales
 - `risk_manager.log`: Logs de gestión de riesgo
 - `telegram_alerts.log`: Logs de alertas Telegram
 
 ### Logging Mejorado
 - **Filtros detallados**: Estado de cada filtro por símbolo
-- **Indicadores técnicos**: Valores en tiempo real de EMA, RSI, ATR, ADX
+- **Indicadores técnicos**: Valores en tiempo real de EMA, RSI, ATR, ADX, MACD, volumen
 - **Sin emojis**: Compatible con sistemas Windows
 - **Timestamps precisos**: Seguimiento temporal de todas las decisiones
 
@@ -491,25 +403,9 @@ risk_params = RiskParameters(
 - Drawdown máximo
 - Ratio SL vs TP alcanzado
 
-
 ## 🚨 Alertas Telegram
 
-Las alertas incluyen: instrumento, timeframe, tipo (BUY/SELL), entrada, SL, TP, motivo técnico, hora UTC.
-
-Ejemplo:
-```
-💹 NUEVA OPERACIÓN
-Instrumento: XAUUSD (Oro)
-Timeframe: 5M
-📈 Tipo: COMPRA
-🎯 Entrada: 2045.50
-🚫 SL: 2038.25
-✅ TP: 2056.85
-📊 Estrategia: EMA 20/50 Bullish Cross + RSI Divergencia
-⚖️ Tipo: Metal Precioso
-⏰ Hora: 10:43 UTC
-```
-
+Ver sección "Alertas por Telegram" arriba para el formato y detalles.
 
 ## 🧪 Testing
 
@@ -528,14 +424,12 @@ pytest test_bot.py -v
 pytest test_bot.py::TestTechnicalIndicators -v
 ```
 
-
 ## 🛡️ Seguridad
 
 - **Variables de entorno**: Nunca hardcodear credenciales
 - **Logs seguros**: No registrar información sensible
 - **Validación de entrada**: Todos los inputs son validados
 - **Límites de riesgo**: Múltiples capas de protección
-
 
 ## 🔧 Troubleshooting
 
@@ -548,10 +442,9 @@ pytest test_bot.py::TestTechnicalIndicators -v
 ### Si no aparecen señales
 1. **Normal**: Las señales solo aparecen cuando se cumplen los filtros técnicos y de riesgo
 2. **Verificar logs**: Los logs muestran qué símbolos están siendo analizados y por qué se filtran
-3. **Filtros activos**: Revisa que los símbolos pasen los filtros ATR, ADX y scoring
+3. **Filtros activos**: Revisa que los símbolos pasen los filtros ATR, ADX, volumen y scoring
 4. **Mercado**: Durante sesiones de baja volatilidad es normal no tener señales
 5. **No hay límite artificial de señales**: El límite real es la gestión de riesgo y posiciones abiertas
-
 
 ## 📊 Rendimiento Actual
 
@@ -569,19 +462,52 @@ pytest test_bot.py::TestTechnicalIndicators -v
 - **Rotación completa**: ~7-8 ciclos para cubrir todos los símbolos disponibles
 
 
-## 📄 Licencia
+## 📄 Licencia y EULA
 
 Este proyecto está licenciado bajo la Licencia MIT.
+El uso del bot requiere aceptar el Acuerdo de Licencia de Usuario Final (EULA), incluido en `EULA.txt`.
+**Resumen EULA:**
+- Uso estrictamente personal y no comercial
+- Prohibida la distribución, ingeniería inversa, descompilación o modificación sin permiso expreso
+- El software se provee "tal cual", sin garantías de ningún tipo
+- El usuario es responsable de los resultados, riesgos y cumplimiento legal
 
 ## 🤝 Contribuciones
 
 Las contribuciones son bienvenidas. Por favor:
-
-1. Fork el proyecto
+1. Haz fork del proyecto
 2. Crea una rama para tu feature (`git checkout -b feature/nueva-feature`)
 3. Commit tus cambios (`git commit -m 'Add nueva feature'`)
 4. Push a la rama (`git push origin feature/nueva-feature`)
 5. Abre un Pull Request
+
+## 🛠️ Troubleshooting y FAQ ampliado
+
+**¿Por qué el bot entra en cooldown y no opera?**
+- Si hay 2 pérdidas consecutivas, el sistema activa un cooldown temporal para proteger el capital. Revisa los logs para ver cuándo se reactiva.
+
+**¿Por qué no se generan señales?**
+- Es normal si los filtros técnicos (EMA, RSI, MACD, volumen, price action) no se cumplen. El mercado puede estar en baja volatilidad o fuera de horario óptimo. Verifica que los símbolos pasen los filtros ATR, ADX, volumen y scoring.
+
+**¿Cómo cambio el riesgo por operación?**
+- Edita `risk_config.py` y ajusta `FIXED_RISK_USD` o cambia el modo a `percent_margin`. El cambio es inmediato y no requiere reiniciar el bot.
+
+**¿Cómo restauro la configuración de instrumentos?**
+- Ejecuta `python configure_instruments.py` o edita el script para personalizar. Por defecto, acciones individuales y ETFs están deshabilitados para reducir ruido. Criptomonedas requieren lógica aparte.
+
+**¿Qué hago si tengo errores de conexión MT5?**
+- Verifica credenciales y que MetaTrader 5 esté abierto y conectado. Consulta `mt5_connector.log` para detalles.
+
+**¿Cómo contribuyo?**
+- Haz fork, crea una rama, realiza tus cambios y abre un Pull Request.
+
+**¿Cómo interpreto los logs?**
+- Los logs detallan el estado de cada filtro, valores de indicadores y motivos de rechazo de señales. Úsalos para depurar y optimizar tu operativa.
+
+**¿Cómo ejecuto los tests y valido el bot?**
+- Usa `pytest test_bot.py -v` para validar la lógica y la integración. Se recomienda backtest mínimo de 3 meses en EURUSD, GBPUSD, XAUUSD, NAS100.
+
+---
 
 ## ⚠️ Disclaimer
 

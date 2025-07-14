@@ -4,13 +4,12 @@ Script interactivo para crear el archivo .env y preparar el entorno antes de emp
 Solicita al usuario los datos necesarios y los guarda en .env.
 Incluye aceptación del EULA.
 """
-import os
+
+import getpass
 from pathlib import Path
-from getpass import getpass
 
 EULA_FILE = "EULA.txt"
-ENV_FILE = ".env"
-
+ENV_USER_FILE = ".env.user"
 
 def print_eula():
     """Muestra el EULA y solicita aceptación."""
@@ -24,34 +23,27 @@ def print_eula():
         print("Debe aceptar el EULA para continuar.")
         exit(1)
 
-def prompt_env():
-    """Solicita los datos al usuario y los guarda en .env."""
-    print("\nPor favor, ingrese los datos requeridos para la configuración:")
-    mt5_login = input("MT5 Login: ").strip()
-    mt5_password = getpass("MT5 Password: ")
-    mt5_server = input("MT5 Server: ").strip()
-    telegram_token = getpass("Telegram Bot Token: ")
-    telegram_chat_id = input("Telegram Chat ID: ").strip()
-    supabase_url = input("Supabase URL (opcional): ").strip()
-    supabase_key = getpass("Supabase API Key (opcional): ")
+def prompt_env_user():
+    print("\nPor favor, ingrese los datos personales requeridos para la configuración:")
+    telegram_chat_id = input("TELEGRAM_CHAT_ID: ").strip()
+    mt5_login = input("MT5_LOGIN (número de cuenta): ").strip()
+    mt5_password = getpass.getpass("MT5_PASSWORD: ")
+    mt5_server = input("MT5_SERVER: ").strip()
+    user_email = input("EMAIL de suscripción: ").strip()
+    user_token = input("TOKEN de suscripción: ").strip()
 
-    env_lines = [
-        f"MT5_LOGIN={mt5_login}",
-        f"MT5_PASSWORD={mt5_password}",
-        f"MT5_SERVER={mt5_server}",
-        f"TELEGRAM_TOKEN={telegram_token}",
-        f"TELEGRAM_CHAT_ID={telegram_chat_id}",
-    ]
-    if supabase_url:
-        env_lines.append(f"SUPABASE_URL={supabase_url}")
-    if supabase_key:
-        env_lines.append(f"SUPABASE_KEY={supabase_key}")
-
-    with open(ENV_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(env_lines) + "\n")
-    print(f"\nArchivo {ENV_FILE} creado correctamente.")
+    env_user_content = f"""TELEGRAM_CHAT_ID={telegram_chat_id}
+MT5_LOGIN={mt5_login}
+MT5_PASSWORD={mt5_password}
+MT5_SERVER={mt5_server}
+USER_EMAIL={user_email}
+USER_TOKEN={user_token}
+"""
+    with open(ENV_USER_FILE, "w", encoding="utf-8") as f:
+        f.write(env_user_content)
+    print(f"\nArchivo {ENV_USER_FILE} creado correctamente.")
 
 if __name__ == "__main__":
     print_eula()
-    prompt_env()
+    prompt_env_user()
     print("\n¡Configuración inicial completada! Ahora puede empaquetar el bot como .exe.")

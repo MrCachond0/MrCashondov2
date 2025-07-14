@@ -1,8 +1,7 @@
-
 # GitHub Copilot Repository Custom Instructions
 
 ## 📌 Project Overview
-This is a Python-based automated trading bot for FOREX markets, focused on scalping and day trading. The project is modular, designed with maintainability, risk control, and performance tracking in mind. It integrates MetaTrader 5 for trade execution and Telegram for signal notifications.
+This is a Python-based automated trading bot for FOREX, INDEX, and COMMODITIES markets, focused on scalping and day trading. The project is modular, designed with maintainability, risk control, and performance tracking in mind. It integrates MetaTrader 5 for trade execution and Telegram for signal notifications.
 
 ## 🧠 What Copilot should know about this repository
 
@@ -47,3 +46,4 @@ This is a Python-based automated trading bot for FOREX markets, focused on scalp
 - Commits should use present tense: `Add risk management`, `Fix signal logic`.
 - Pull requests must include a brief description, checklist, and pass tests.
 
+## 📚 Terminal executions are made in VSCode PowerShell, use propper commands
