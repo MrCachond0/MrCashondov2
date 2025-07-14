@@ -16,16 +16,18 @@
 
 ---
 
-## 🚀 Instalación Súper Fácil
-1. **Descarga y descomprime** el paquete de MrCashondoV2 en tu PC.
-2. **Ejecuta** `setup.bat` (doble clic). Se instalará todo automáticamente y se abrirá el instalador interactivo.
+
+## 🚀 Instalación para Usuarios Finales
+1. **Recibe el instalador** (`MrCashondoV2.exe`) directamente del equipo de soporte al adquirir tu suscripción. Este archivo es personal e intransferible.
+2. **Ejecuta** el archivo `.exe` (doble clic). El instalador te guiará paso a paso e incluirá el EULA que deberás aceptar.
 3. Ingresa solo tus datos personales:
    - 📲 Chat ID de Telegram
    - 🔑 Credenciales de MetaTrader 5 (login, password, servidor)
    - 📧 Email y token de suscripción
    *(¡El resto ya está cifrado y protegido!)*
-4. Acepta el EULA cuando se muestre en pantalla.
-5. **Ejecuta** `run_bot.bat` para comenzar a operar.
+4. Una vez instalado, simplemente ejecuta el acceso directo creado en tu escritorio para comenzar a operar.
+
+> **Nota:** No es necesario descargar nada desde GitHub ni ejecutar archivos `.bat`. Todo lo necesario está incluido en el instalador `.exe` que recibirás tras tu suscripción.
 
 ---
 
