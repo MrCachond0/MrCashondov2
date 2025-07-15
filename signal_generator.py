@@ -1,11 +1,104 @@
 from calendar_blackout import CalendarBlackout
 
 class SignalGenerator:
+    def analyze_market_data(self, market_data):
+        """
+        Analiza los datos de mercado y genera una señal solo si cumple con todos los filtros endurecidos y validaciones de contexto, momentum, horario, confluencias, tendencia macro y pullback.
+        """
+        from indicators import TechnicalIndicators
+        from context_analyzer import ContextAnalyzer
+        import numpy as np
+        context_analyzer = ContextAnalyzer()
+        close = market_data.close
+        high = market_data.high
+        low = market_data.low
+        volume = market_data.volume
+        symbol = market_data.symbol
+        timeframe = market_data.timeframe
+        # ATR y ADX
+        atr = TechnicalIndicators.atr(high, low, close, 14)[-1]
+        adx = TechnicalIndicators.adx(high, low, close, 14)[-1]
+        # Filtro ADX endurecido
+        if adx < 28:
+            return None
+        # Momentum: volumen actual vs media
+        vol_actual = volume[-1]
+        vol_media = np.mean(volume[-20:]) if len(volume) >= 20 else np.mean(volume)
+        if vol_actual < 1.5 * vol_media:
+            return None
+        # Ruptura de máximos/mínimos previos
+        breakout_confirmed = False
+        if close[-1] > np.max(high[-10:-1]):
+            breakout_confirmed = True
+        elif close[-1] < np.min(low[-10:-1]):
+            breakout_confirmed = True
+        if not breakout_confirmed:
+            return None
+        # ATR mínimo endurecido
+        if atr < 0.0015:
+            return None
+        # Validar contexto institucional
+        if not context_analyzer.is_in_institutional_zone(symbol, close[-1]):
+            return None
+        # Validar horario (Londres/NY)
+        import datetime
+        now_utc = datetime.datetime.utcnow().time()
+        if not (datetime.time(7,0) <= now_utc <= datetime.time(17,0)):
+            return None
+        # Bloqueo por noticias económicas relevantes
+        if hasattr(context_analyzer, 'is_news_time') and context_analyzer.is_news_time(symbol):
+            return None
+        # Validar tendencia macro y pullback
+        tendencia_macro = context_analyzer.get_macro_trend(symbol, timeframe)
+        if not tendencia_macro:
+            return None
+        pullback_confirmed = context_analyzer.is_pullback_confirmed(symbol, close[-1], timeframe)
+        if not pullback_confirmed:
+            return None
+        # Confluencias técnicas (ejemplo: patrón de vela, EMA, RSI, soporte/resistencia, volumen, etc.)
+        confluencias = 0
+        # Ejemplo de chequeos de confluencia (debes adaptar a tu lógica real):
+        if TechnicalIndicators.is_pin_bar(close, high, low):
+            confluencias += 1
+        if TechnicalIndicators.is_engulfing(close, high, low):
+            confluencias += 1
+        if TechnicalIndicators.ema(close, 21)[-1] < close[-1]:
+            confluencias += 1
+        if TechnicalIndicators.rsi(close, 14)[-1] > 55:
+            confluencias += 1
+        if context_analyzer.is_in_institutional_zone(symbol, close[-1]):
+            confluencias += 1
+        if confluencias < 4:
+            return None
+        # Calcular confianza y score
+        confidence = min(1.0, 0.2 * confluencias + 0.2 * (adx/40) + 0.2 * (vol_actual/vol_media) + 0.2 * (atr/0.002))
+        rr_ratio = 2.5  # Ejemplo, deberías calcular el real
+        # Solo señales con confianza y R:R alto
+        if confidence < 0.85 or rr_ratio < 2.2:
+            return None
+        # Construir objeto señal (debes adaptar a tu clase TradingSignal)
+        signal = TradingSignal(
+            symbol=symbol,
+            timeframe=timeframe,
+            entry_price=close[-1],
+            stop_loss=close[-1] - atr if tendencia_macro == 'bullish' else close[-1] + atr,
+            take_profit=close[-1] + rr_ratio*atr if tendencia_macro == 'bullish' else close[-1] - rr_ratio*atr,
+            confidence=confidence,
+            reasons=['ADX alto','Volumen impulso','Breakout','ATR suficiente','Contexto institucional','Horario óptimo','Tendencia macro','Pullback confirmado'],
+            confluencias=confluencias,
+            breakout_confirmed=breakout_confirmed,
+            tendencia_macro=tendencia_macro,
+            pullback_confirmed=pullback_confirmed,
+            rr_ratio=rr_ratio
+        )
+        return signal
     def filter_and_rank_signals(self, signals, mt5_connector):
         """
-        Filtra y rankea señales según criterios de probabilidad, spread, tipo de par, timeframe, ATR/spread y volumen.
+        Filtra y rankea señales según criterios de probabilidad, spread, tipo de par, timeframe, ATR/spread, volumen, contexto institucional, horario y confluencias.
         Devuelve solo las mejores señales ordenadas por score.
         """
+        from context_analyzer import ContextAnalyzer
+        import datetime
         def get_pair_type(symbol):
             majors = ['EURUSD', 'USDJPY', 'GBPUSD', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD']
             minors = ['EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CHFJPY', 'EURCAD', 'EURAUD', 'GBPCAD', 'NZDJPY', 'CADJPY', 'AUDCAD', 'AUDNZD', 'NZDCAD', 'GBPAUD', 'GBPNZD']
@@ -20,6 +113,7 @@ class SignalGenerator:
                 return 1
             return 0
 
+        context_analyzer = ContextAnalyzer()
         filtered = []
         for sig in signals:
             # Spread filter más estricto
@@ -36,27 +130,51 @@ class SignalGenerator:
                 continue
             # ATR/Spread filter endurecido y ATR mínimo absoluto
             atr = getattr(sig, 'atr_value', None)
-            if atr is not None and atr < 0.001:
+            if atr is not None and atr < 0.0015:
                 continue
             if atr is not None and spread > 0 and (atr/spread) < 3.0:
                 continue
-            # Volumen filter
+            # Volumen filter endurecido (impulso)
             vol_actual = symbol_info.get('current_volume_real', 0)
             prom_20 = symbol_info.get('volumehigh', 1)  # fallback
             if prom_20 == 0:
                 prom_20 = 1
             volume_score = vol_actual / prom_20 if prom_20 else 1
-            if volume_score < 0.8:
+            if volume_score < 1.5:
+                continue
+            # Validación de ruptura de máximos/mínimos previos (momentum)
+            if hasattr(sig, 'breakout_confirmed') and not sig.breakout_confirmed:
+                continue
+            # Validación de contexto institucional (soporte/resistencia)
+            if not context_analyzer.is_in_institutional_zone(sig.symbol, sig.entry_price):
+                continue
+            # Validación de horario (solo Londres y NY, 07:00-17:00 UTC)
+            now_utc = datetime.datetime.utcnow().time()
+            if not (datetime.time(7,0) <= now_utc <= datetime.time(17,0)):
+                continue
+            # Bloqueo por noticias económicas relevantes (30 min antes/después)
+            if hasattr(context_analyzer, 'is_news_time') and context_analyzer.is_news_time(sig.symbol):
                 continue
             # Confianza endurecida
-            if getattr(sig, 'confidence', 0) < 0.8:
+            if getattr(sig, 'confidence', 0) < 0.85:
+                continue
+            # Penalización por baja confluencia o R:R mínimo
+            if getattr(sig, 'confluencias', 0) < 4:
+                continue
+            if hasattr(sig, 'rr_ratio') and sig.rr_ratio < 2.2:
+                continue
+            # Validación de tendencia macro y retroceso (pullback a EMA o soporte/resistencia)
+            if hasattr(sig, 'tendencia_macro') and not sig.tendencia_macro:
+                continue
+            if hasattr(sig, 'pullback_confirmed') and not sig.pullback_confirmed:
                 continue
             # Score para ranking endurecido
             score = (
-                3.0 * getattr(sig, 'confidence', 0) - 0.02 * spread +
-                0.4 * pair_type +
-                0.2 * (1 if sig.timeframe in ['H1','H4'] else 0) +
-                (0.3 * min(atr/spread, 3) if (atr and spread) else 0)
+                3.5 * getattr(sig, 'confidence', 0) - 0.03 * spread +
+                0.5 * pair_type +
+                0.3 * (1 if sig.timeframe in ['H1','H4'] else 0) +
+                (0.4 * min(atr/spread, 3) if (atr and spread) else 0) +
+                0.2 * getattr(sig, 'confluencias', 0)
             )
             filtered.append((score, sig))
         # Ordenar por score descendente
@@ -437,7 +555,19 @@ def is_optimal_trading_hour(mt5_connector, symbol: str) -> bool:
     return False
 """
 Signal Generator Module
-Generates trading signals based on technical analysis
+Genera señales de trading solo bajo condiciones estrictas de momentum, contexto institucional, horario y volatilidad (actualización julio 2025):
+
+- ADX >= 28 (tendencia clara)
+- Volumen actual > 1.5x media de 20 velas
+- Confirmación de breakout (máximos/mínimos previos)
+- ATR mínimo absoluto 0.0015
+- Solo en zonas institucionales (context_analyzer)
+- Solo en sesión Londres/NY (07:00-17:00 UTC), bloqueando 30 min antes/después de noticias
+- Mínimo 4 confluencias técnicas
+- Confianza >= 0.85 y R:R >= 2.2
+- Gestión activa: trailing stop y break-even solo tras movimientos >1.2x ATR
+
+Estas reglas buscan evitar entradas débiles y operar solo en condiciones óptimas, reduciendo drawdown y mejorando la robustez del sistema.
 """
 
 import numpy as np

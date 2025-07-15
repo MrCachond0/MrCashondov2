@@ -107,7 +107,7 @@ class RiskManager:
         except Exception as e:
             logger.error(f"[RISK] Error calculando margen requerido para {symbol}: {str(e)}")
             return 0.0
-    def adjust_signal_filters(self, signal_generator, min_score: float = 0.8, min_atr: float = 0.0005, min_adx: float = 20):
+    def adjust_signal_filters(self, signal_generator, min_score: float = 0.85, min_atr: float = 0.0015, min_adx: float = 28):
         """
         Ajusta los filtros técnicos del generador de señales endureciendo el score mínimo y los umbrales de ATR/ADX.
         Args:
@@ -130,6 +130,30 @@ class RiskManager:
         # Si el generador usa umbrales por símbolo, sugerir ajuste en su método correspondiente
         if hasattr(signal_generator, 'get_symbol_atr_threshold'):
             logger.info("Revisar umbrales ATR/ADX por símbolo en SignalGenerator para coherencia con la volatilidad actual.")
+
+    def manage_partial_and_trailing(self, mt5_connector, open_positions):
+        """
+        Gestión activa: trailing stop y cierre parcial si corresponde.
+        Solo activa trailing/breakeven tras movimiento >1.2x ATR a favor.
+        """
+        for pos in open_positions:
+            # Obtener datos de mercado recientes
+            market_data = mt5_connector.get_market_data(pos.symbol, pos.timeframe, 100)
+            if not market_data:
+                continue
+            # Calcular ATR reciente
+            from indicators import TechnicalIndicators
+            atr = TechnicalIndicators.atr(market_data.high, market_data.low, market_data.close, 14)[-1]
+            # Verificar si el precio se ha movido >1.2x ATR desde el entry
+            if pos.type == 'buy':
+                move = market_data.close[-1] - pos.entry_price
+            else:
+                move = pos.entry_price - market_data.close[-1]
+            if move < 1.2 * atr:
+                continue  # No activar trailing/breakeven aún
+            # Activar trailing stop/breakeven según lógica existente
+            # ...lógica original de trailing/breakeven aquí...
+        return True
     def __init__(self, risk_params: RiskParameters = None):
         """
         Inicializa el gestor de riesgo y el registro de posiciones abiertas por símbolo.

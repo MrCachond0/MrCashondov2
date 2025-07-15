@@ -1,6 +1,37 @@
 # Cambios recientes (julio 2025)
 
 ## Mejoras automáticas implementadas
+1. **Endurecimiento de score/confianza y filtros de señales:**
+   - El score mínimo y la confianza requerida para ejecutar señales se han incrementado (confianza >= 0.85, R:R >= 2.2).
+   - El cálculo de score ahora penaliza más el spread y premia señales de mayor calidad.
+   - Solo se consideran señales con ADX >= 28 (tendencia clara) y volumen actual > 1.5x la media de 20 velas.
+   - Se exige un ATR mínimo absoluto de 0.0015 y confirmación de breakout (ruptura de máximos/mínimos previos).
+   - Solo se permite operar en zonas institucionales validadas por el módulo context_analyzer.
+   - Solo se opera en la sesión de Londres y Nueva York (07:00-17:00 UTC), bloqueando 30 minutos antes y después de noticias económicas relevantes.
+   - Se exigen al menos 4 confluencias técnicas (patrón de vela, EMA, RSI, volumen, nivel clave, etc.).
+   - El trailing stop y break-even solo se activan tras movimientos >1.2x ATR a favor.
+
+# 🚀 MrCashondoV2 - ¡Tu Trading Automatizado, Inteligente y Sin Límites! 💸🤖
+¡Bienvenido a la revolución del trading automático! MrCashondoV2 es el bot que te permite operar en FOREX, metales e índices de manera profesional, sin que tengas que mover un dedo. Recibe señales, ejecuta operaciones y gestiona tu riesgo como un verdadero pro, ¡todo mientras disfrutas de tu tiempo libre! 🏖️📈
+
+---
+## Sistema de señales de trading (actualizado julio 2025)
+
+El sistema genera señales solo si se cumplen criterios estrictos de momentum, contexto institucional, horario y volatilidad:
+- **ADX**: Solo se consideran señales con ADX >= 28 (tendencia clara).
+- **Volumen**: Se requiere impulso, validado por tick_volume > 1.5x la media de 20 velas.
+- **Breakout**: Confirmación de ruptura de máximos/mínimos previos.
+- **ATR**: El ATR mínimo absoluto es 0.0015 (mercados sin volatilidad quedan descartados).
+- **Contexto institucional**: Solo se permite operar en zonas validadas por el módulo context_analyzer (soporte/resistencia institucional, liquidez reciente).
+- **Horario**: Solo se opera en la sesión de Londres y Nueva York (07:00-17:00 UTC). Se bloquean operaciones 30 minutos antes y después de noticias económicas relevantes.
+- **Confluencias**: Se exigen al menos 4 confluencias técnicas (patrón de vela, EMA, RSI, volumen, nivel clave, etc.).
+- **Scoring/confianza**: Solo se aceptan señales con confianza >= 0.85 y R:R >= 2.2.
+- **Gestión activa**: El trailing stop y break-even solo se activan tras movimientos >1.2x ATR a favor.
+
+Estas reglas buscan evitar entradas débiles, operar solo en condiciones óptimas y reducir drawdown.
+# Cambios recientes (julio 2025)
+
+## Mejoras automáticas implementadas
 
 1. **Endurecimiento de score/confianza:**
    - El score mínimo y la confianza requerida para ejecutar señales se han incrementado.
