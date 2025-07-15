@@ -1,26 +1,31 @@
-
-"""
-Main Trading Bot Module - Mr.Cashondo
-Automated FOREX trading bot with scalping and day trading strategies
-"""
-
-# === IMPORTS NECESARIOS ===
+import subprocess
+import requests
+import tempfile
+import zipfile
+import shutil
+import sys
 import os
+import atexit
+import time
 
 # === AUTO UPDATE SYSTEM ===
-import subprocess
+GITHUB_REPO = "MrCachond0/MrCashondov2"
+BRANCH = "main"
+import os
 import sys
 import requests
+import zipfile
 import shutil
+import tempfile
+import subprocess
+import atexit
+import time
 
-GITHUB_REPO = "MrCachond0/MrCashondov2"
-
-import os, sys, requests, zipfile, shutil, tempfile, time
-BRANCH = "main"
 def get_base_dir():
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
 BASE_DIR = get_base_dir()
 LOCAL_VERSION_FILE = os.path.join(BASE_DIR, "version.txt")
 REMOTE_VERSION_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{BRANCH}/version.txt"
@@ -36,21 +41,25 @@ def get_remote_version():
         r = requests.get(REMOTE_VERSION_URL, timeout=10)
         if r.status_code == 200:
             return r.text.strip()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[AutoUpdate] Error al obtener versión remota: {e}")
     return None
 
 def auto_update():
     local_version = get_local_version()
     remote_version = get_remote_version()
-    if remote_version and remote_version != local_version:
+    if remote_version is None:
+        print("[AutoUpdate] No se pudo obtener la versión remota. Continuando con la versión local.")
+        return
+    if remote_version != local_version:
         print(f"\n[AutoUpdate] Nueva versión disponible: {remote_version} (actual: {local_version})")
         print("Descargando y aplicando actualización desde GitHub...")
         zip_url = f"https://github.com/{GITHUB_REPO}/archive/refs/heads/{BRANCH}.zip"
         temp_dir = tempfile.mkdtemp()
         zip_path = os.path.join(temp_dir, "update.zip")
         try:
-            with requests.get(zip_url, stream=True, timeout=30) as r:
+            # Descargar ZIP
+            with requests.get(zip_url, stream=True, timeout=60) as r:
                 r.raise_for_status()
                 with open(zip_path, "wb") as f:
                     for chunk in r.iter_content(chunk_size=8192):
@@ -81,11 +90,10 @@ def auto_update():
                 f.write(remote_version)
             print("Actualización aplicada. Reiniciando...")
             time.sleep(2)
-            # Reiniciar el .exe o script
-            if getattr(sys, 'frozen', False):
-                os.execl(sys.executable, sys.executable, *sys.argv)
-            else:
-                os.execl(sys.executable, sys.executable, *sys.argv)
+            def relaunch():
+                subprocess.Popen([sys.executable] + sys.argv)
+            atexit.register(relaunch)
+            sys.exit(0)
         except Exception as e:
             print(f"[AutoUpdate] Error durante la actualización: {e}")
             print("Continúa con la versión actual.")
@@ -95,8 +103,19 @@ def auto_update():
             except Exception:
                 pass
 
-# Ejecutar auto-update antes de cualquier otra cosa
+# Ejecutar auto_update SIEMPRE al inicio del bot
 auto_update()
+
+import time
+import logging
+from datetime import datetime, timedelta, timezone
+import os
+import schedule
+from dotenv import load_dotenv
+from env_loader import load_env
+load_env()
+from subscription_api import validate_subscription
+from typing import Dict, List, Optional
 import time
 import logging
 from datetime import datetime, timedelta, timezone
@@ -131,14 +150,21 @@ logger = logging.getLogger(__name__)
 import threading
 import getpass
 
+from trade_database import TradeDatabase
+
 class MrCashondoBot:
+    def __init__(self, *args, **kwargs):
+        # ...existing code...
+        self.trade_db = TradeDatabase()
+        # ...existing code...
+
     def process_signal(self, signal: TradingSignal) -> None:
         """
         Procesa una señal de trading: registra, filtra duplicados, ajusta trailing y ejecuta si corresponde.
         Args:
             signal: Objeto TradingSignal generado por el SignalGenerator
         """
-        # --- FILTRO DE DUPLICIDAD EN BASE DE DATOS ---
+        # --- FILTRO DE DUPLICIDAD EN BASE DE DATOS (siempre, incluso tras reinicio) ---
         duplicate = None
         if self.trade_db:
             duplicate = self.trade_db.find_duplicate_signal(
@@ -158,7 +184,7 @@ class MrCashondoBot:
                 logger.info(f"[DUPLICATE][DISCARDED] Señal duplicada detectada para {signal.symbol} {signal.signal_type} en {getattr(signal, 'timeframe', 'UNKNOWN')}. Se descarta la nueva señal y se mantiene la original (ID {duplicate['id']}).")
                 return
 
-        # --- FILTRO DE DUPLICIDAD EN POSICIONES ABIERTAS EN MT5 ---
+        # --- FILTRO DE DUPLICIDAD EN POSICIONES ABIERTAS EN MT5 (siempre, incluso tras reinicio) ---
         open_positions = []
         if self.mt5_connector and hasattr(self.mt5_connector, 'get_open_positions'):
             try:
@@ -169,14 +195,15 @@ class MrCashondoBot:
         for pos in open_positions:
             pos_symbol = pos.get('symbol') if isinstance(pos, dict) else getattr(pos, 'symbol', None)
             pos_type = pos.get('type') if isinstance(pos, dict) else getattr(pos, 'type', None)
+            pos_timeframe = pos.get('timeframe', 'UNKNOWN') if isinstance(pos, dict) else getattr(pos, 'timeframe', 'UNKNOWN')
             order_type = 0 if signal.signal_type == "BUY" else 1
+            # Si las posiciones abiertas no tienen timeframe, solo compara símbolo y tipo
             if pos_symbol == signal.symbol and pos_type == order_type:
                 is_duplicate_mt5 = True
                 break
         if is_duplicate_mt5:
             logger.info(f"[DUPLICATE][MT5] Ya existe una posición abierta en MT5 para {signal.symbol} {signal.signal_type}. Se descarta la señal.")
             if self.trade_db:
-                # Registrar el intento de duplicado en la base de datos
                 self.trade_db.log_signal({
                     'symbol': signal.symbol,
                     'timeframe': getattr(signal, 'timeframe', 'UNKNOWN'),
