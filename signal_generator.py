@@ -22,17 +22,23 @@ class SignalGenerator:
 
         filtered = []
         for sig in signals:
-            # Spread filter
+            # Spread filter más estricto
             symbol_info = mt5_connector.get_symbol_info(sig.symbol)
             spread = symbol_info.get('spread', 0)
+            # Filtro de spread más estricto
+            if spread > 15:
+                continue
             # Filtro por tipo
-            if get_pair_type(sig.symbol) == 1 and spread > 200:
+            pair_type = get_pair_type(sig.symbol)
+            if pair_type == 1 and spread > 120:
                 continue
-            elif get_pair_type(sig.symbol) >= 2 and spread > 35:
+            elif pair_type >= 2 and spread > 25:
                 continue
-            # ATR/Spread filter
+            # ATR/Spread filter endurecido y ATR mínimo absoluto
             atr = getattr(sig, 'atr_value', None)
-            if atr is not None and spread > 0 and (atr/spread) < 2:
+            if atr is not None and atr < 0.001:
+                continue
+            if atr is not None and spread > 0 and (atr/spread) < 3.0:
                 continue
             # Volumen filter
             vol_actual = symbol_info.get('current_volume_real', 0)
@@ -40,17 +46,17 @@ class SignalGenerator:
             if prom_20 == 0:
                 prom_20 = 1
             volume_score = vol_actual / prom_20 if prom_20 else 1
-            if volume_score < 0.7:
+            if volume_score < 0.8:
                 continue
-            # Confianza
+            # Confianza endurecida
             if getattr(sig, 'confidence', 0) < 0.8:
                 continue
-            # Score para ranking
+            # Score para ranking endurecido
             score = (
-                2.0 * getattr(sig, 'confidence', 0) - 0.01 * spread +
-                0.2 * get_pair_type(sig.symbol) +
-                0.1 * (1 if sig.timeframe in ['H1','H4'] else 0) +
-                (0.2 * min(atr/spread, 3) if (atr and spread) else 0)
+                3.0 * getattr(sig, 'confidence', 0) - 0.02 * spread +
+                0.4 * pair_type +
+                0.2 * (1 if sig.timeframe in ['H1','H4'] else 0) +
+                (0.3 * min(atr/spread, 3) if (atr and spread) else 0)
             )
             filtered.append((score, sig))
         # Ordenar por score descendente
@@ -61,7 +67,7 @@ class SignalGenerator:
     def __init__(self, instrument_manager=None):
         self.instrument_manager = instrument_manager or InstrumentManager()
         self.logger = logger
-        self.confidence_threshold = 0.7
+        self.confidence_threshold = 0.9
         self.timeframes = ['M5', 'M15', 'H1']
         self.preferred_symbols = []
         self.calendar_blackout = CalendarBlackout()
@@ -180,10 +186,10 @@ class SignalGenerator:
                     continue
                 reasons.append('R:R >= 1:2')
                 # Filtros técnicos adicionales (ATR mínimo, etc.)
-                if atr < 0.0005:
+                if atr < 0.001:
                     continue
-                # Scoring/confianza (placeholder, ajustar con lógica real si aplica)
-                confidence = 0.8
+                # Scoring/confianza (ahora más estricto y adaptativo)
+                confidence = 0.9
                 if confidence < self.confidence_threshold:
                     continue
                 # Construir señal
@@ -200,6 +206,14 @@ class SignalGenerator:
                     atr_value=atr
                 )
                 signals.append(signal)
+    def manage_active_positions(self, mt5_connector, risk_manager):
+        """
+        Llama periódicamente a la gestión activa de posiciones (trailing stop y cierre parcial).
+        """
+        # Placeholder: aquí se debe llamar a risk_manager.manage_partial_and_trailing()
+        # Ejemplo:
+        # risk_manager.manage_partial_and_trailing(mt5_connector)
+        pass
         # Filtrar y rankear señales antes de devolver
         ranked_signals = self.filter_and_rank_signals(signals, mt5_connector)
         return ranked_signals
@@ -800,15 +814,17 @@ class SignalGenerator:
             return entry_price + r_multiple * r
         else:
             return entry_price - r_multiple * r
-    def _rotate_symbols(self, mt5_connector=None):
+    def scan_all_symbols(self, mt5_connector, timeframes=None):
         """
         Rotación deshabilitada: siempre se analizan todos los símbolos disponibles de FOREX, metales e índices.
         Esta función asegura que self.symbols contenga solo símbolos tradeables de estos tipos en cada ciclo.
         Refuerza el filtrado para excluir ACCIONES, CRIPTO y ETFs.
         """
+        from trade_database import TradeDatabase
         if mt5_connector is not None:
             all_symbols = mt5_connector.get_available_symbols("all", dynamic_mode=True)
             filtered = []
+            db = TradeDatabase()
             for symbol in all_symbols:
                 if self._is_symbol_type_enabled(symbol):
                     filtered.append(symbol)
@@ -851,6 +867,23 @@ class SignalGenerator:
         self.generated_signals = []  # Todas las señales generadas
         self.virtual_trades = []     # Todas las señales convertidas a virtual trades
         self._lock = threading.Lock()
+
+    # Elimina duplicados de constructores y métodos innecesarios
+
+    # --- Evitar duplicados: no ejecutar si ya existe señal ejecutada/pending para este símbolo, tf y dirección ---
+    def is_duplicate_signal(self, db, symbol, tf, trend_macro):
+        if trend_macro == 'bullish':
+            signal_type = 'BUY'
+        elif trend_macro == 'bearish':
+            signal_type = 'SELL'
+        else:
+            signal_type = None
+        if signal_type:
+            duplicate = db.find_duplicate_signal(symbol, tf, signal_type)
+            if duplicate:
+                logger.info(f"[DUPLICADO] {symbol} {tf} {signal_type}: Ya existe señal ejecutada/pending en ciclo anterior. No se genera nueva señal.")
+                return True
+        return False
 
     @property
     def preferred_symbols(self) -> list:

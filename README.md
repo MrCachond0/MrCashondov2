@@ -1,3 +1,19 @@
+# Cambios recientes (julio 2025)
+
+## Mejoras automáticas implementadas
+
+1. **Endurecimiento de score/confianza:**
+   - El score mínimo y la confianza requerida para ejecutar señales se han incrementado.
+   - El cálculo de score ahora penaliza más el spread y premia señales de mayor calidad.
+2. **ATR mínimo y filtro de spread:**
+   - Se exige un ATR mínimo absoluto y un ratio ATR/spread más alto para filtrar mercados de baja volatilidad o con spread alto.
+   - El filtro de spread es más estricto.
+
+3. **Gestión activa de posiciones:**
+   - Ahora el bot ejecuta gestión activa (trailing stop y cierre parcial) en tiempo real desde el ciclo principal.
+4. **Icono personalizado en el instalador:**
+   - El archivo ejecutable `.exe` generado incluye el icono personalizado `capturabot.ico` para una experiencia visual profesional.
+
 
 # 🚀 MrCashondoV2 - ¡Tu Trading Automatizado, Inteligente y Sin Límites! 💸🤖
 

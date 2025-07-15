@@ -4,11 +4,6 @@ from cryptography.fernet import Fernet
 import getpass
 
 def main():
-TELEGRAM_CHAT_ID={telegram_chat_id}
-MT5_LOGIN={mt5_login}
-MT5_PASSWORD={mt5_password}
-MT5_SERVER={mt5_server}
-"""
     print("Bienvenido a Mr. Cashondo Bot - Configuración Inicial\n")
     print("Por favor, introduce los siguientes datos para crear tu archivo .env seguro:")
 

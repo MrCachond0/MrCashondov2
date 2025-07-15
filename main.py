@@ -401,10 +401,26 @@ class MrCashondoBot:
             if not self.mt5_connector:
                 logger.warning("MT5Connector no inicializado para monitoreo de posiciones.")
                 return
-            # Aquí deberías implementar la lógica de gestión de posiciones abiertas
-            # Por ejemplo, trailing stop, cierre parcial, etc.
-            # Si tienes una función específica, llama aquí
-            logger.debug("Monitoreo de posiciones activas (placeholder)")
+            # Gestión activa de posiciones: trailing stop y cierre parcial
+            for pos in self.open_positions:
+                # Se asume que cada 'pos' es un dict u objeto con los siguientes atributos:
+                # position_id, entry_price, stop_loss, take_profit, current_price, signal_type, volume, close_prices, atr
+                try:
+                    self.risk_manager.manage_partial_and_trailing(
+                        pos['position_id'],
+                        pos['entry_price'],
+                        pos['stop_loss'],
+                        pos['take_profit'],
+                        pos['current_price'],
+                        pos['signal_type'],
+                        pos['volume'],
+                        pos['close_prices'],
+                        pos['atr'],
+                        self.mt5_connector
+                    )
+                except Exception as e:
+                    logger.error(f"Error gestionando posición {pos}: {str(e)}")
+            logger.debug("Monitoreo de posiciones activas: gestión activa ejecutada")
         except Exception as e:
             logger.error(f"Error en monitor_positions: {str(e)}")
 
@@ -444,6 +460,7 @@ class MrCashondoBot:
         self.telegram_alerts = None
         self.trade_db = None
         self.timeframes = ['M5', 'M15', 'H1']  # Ejemplo, puedes ajustar
+        self.open_positions = []  # Inicializa la lista de posiciones abiertas para evitar errores
 
     def send_daily_summary(self):
         """

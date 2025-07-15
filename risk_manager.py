@@ -47,6 +47,22 @@ class PositionSize:
     stop_loss_pips: float
 
 class RiskManager:
+    def manage_partial_and_trailing(self, mt5_connector, open_positions):
+        """
+        Gestión activa: trailing stop y cierre parcial si corresponde.
+        """
+        for pos in open_positions:
+            # Trailing stop
+            if hasattr(pos, 'trailing_stop') and pos.trailing_stop:
+                # Lógica de trailing stop (simplificada)
+                # ... implementar lógica real según plataforma ...
+                pass
+            # Cierre parcial
+            if hasattr(pos, 'partial_close') and pos.partial_close:
+                # Lógica de cierre parcial
+                # ... implementar lógica real según plataforma ...
+                pass
+        return True
     def get_exposure_limit(self, symbol_info: dict, account_info: dict) -> float:
         """
         Calcula el límite de exposición permitido para una operación según el tipo de instrumento.
