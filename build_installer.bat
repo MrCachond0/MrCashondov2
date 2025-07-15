@@ -16,7 +16,7 @@ REM if errorlevel 1 exit /b %errorlevel%
 
 
 REM Paso 2: Empaquetar con PyInstaller (sin ofuscación)
-pyinstaller --onefile --name MrCashondoV2 --add-data ".env;." --add-data "EULA.txt;." main.py
+pyinstaller --onefile --name MrCashondoV2 --add-data ".env;." --add-data "EULA.txt;." --add-data "first_run_setup.py;." main.py
 if errorlevel 1 exit /b %errorlevel%
 
 
