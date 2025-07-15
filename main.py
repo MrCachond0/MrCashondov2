@@ -14,8 +14,15 @@ import requests
 import shutil
 
 GITHUB_REPO = "MrCachond0/MrCashondov2"
+
+import os, sys, requests, zipfile, shutil, tempfile, time
 BRANCH = "main"
-LOCAL_VERSION_FILE = "version.txt"
+def get_base_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = get_base_dir()
+LOCAL_VERSION_FILE = os.path.join(BASE_DIR, "version.txt")
 REMOTE_VERSION_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{BRANCH}/version.txt"
 
 def get_local_version():
@@ -39,41 +46,54 @@ def auto_update():
     if remote_version and remote_version != local_version:
         print(f"\n[AutoUpdate] Nueva versión disponible: {remote_version} (actual: {local_version})")
         print("Descargando y aplicando actualización desde GitHub...")
-        # Descargar ZIP del repo
         zip_url = f"https://github.com/{GITHUB_REPO}/archive/refs/heads/{BRANCH}.zip"
-        zip_path = "update.zip"
+        temp_dir = tempfile.mkdtemp()
+        zip_path = os.path.join(temp_dir, "update.zip")
         try:
             with requests.get(zip_url, stream=True, timeout=30) as r:
+                r.raise_for_status()
                 with open(zip_path, "wb") as f:
-                    shutil.copyfileobj(r.raw, f)
-            # Extraer y sobreescribir archivos
-            import zipfile
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            # Extraer el ZIP
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall("update_tmp")
-            update_dir = os.path.join("update_tmp", f"MrCashondov2-{BRANCH}")
-            # Copiar archivos nuevos (excepto .env, .env.user, .env.enc, .env.key, logs, trades.db)
+                zip_ref.extractall(temp_dir)
+            # Buscar la carpeta extraída
+            extracted_folder = os.path.join(temp_dir, f"{GITHUB_REPO.split('/')[-1]}-{BRANCH}")
+            # Copiar archivos sobre el directorio actual (manejar .exe y scripts)
             exclude = {".env", ".env.user", ".env.enc", ".env.key", "mr_cashondo_bot.log", "trades.db", "logs"}
-            for root, dirs, files in os.walk(update_dir):
-                rel_dir = os.path.relpath(root, update_dir)
+            for root, dirs, files in os.walk(extracted_folder):
+                rel_path = os.path.relpath(root, extracted_folder)
+                dest_dir = os.path.join(BASE_DIR, rel_path) if rel_path != '.' else BASE_DIR
+                if not os.path.exists(dest_dir):
+                    os.makedirs(dest_dir, exist_ok=True)
                 for file in files:
                     if file in exclude:
                         continue
-                    src = os.path.join(root, file)
-                    dst = os.path.join(os.getcwd(), rel_dir, file) if rel_dir != "." else os.path.join(os.getcwd(), file)
-                    os.makedirs(os.path.dirname(dst), exist_ok=True)
-                    shutil.copy2(src, dst)
+                    src_file = os.path.join(root, file)
+                    dest_file = os.path.join(dest_dir, file)
+                    # No sobreescribir el propio ejecutable en caliente
+                    if getattr(sys, 'frozen', False) and file.lower().endswith('.exe') and os.path.abspath(dest_file) == os.path.abspath(sys.executable):
+                        continue
+                    shutil.copy2(src_file, dest_file)
             # Actualizar version.txt
             with open(LOCAL_VERSION_FILE, "w", encoding="utf-8") as f:
                 f.write(remote_version)
-            print("Actualización aplicada. Reiniciando bot...")
-            # Limpiar archivos temporales
-            shutil.rmtree("update_tmp", ignore_errors=True)
-            os.remove(zip_path)
-            # Reiniciar el script
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            print("Actualización aplicada. Reiniciando...")
+            time.sleep(2)
+            # Reiniciar el .exe o script
+            if getattr(sys, 'frozen', False):
+                os.execl(sys.executable, sys.executable, *sys.argv)
+            else:
+                os.execl(sys.executable, sys.executable, *sys.argv)
         except Exception as e:
             print(f"[AutoUpdate] Error durante la actualización: {e}")
             print("Continúa con la versión actual.")
+        finally:
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception:
+                pass
 
 # Ejecutar auto-update antes de cualquier otra cosa
 auto_update()
@@ -118,7 +138,7 @@ class MrCashondoBot:
         Args:
             signal: Objeto TradingSignal generado por el SignalGenerator
         """
-        # --- FILTRO DE DUPLICIDAD ---
+        # --- FILTRO DE DUPLICIDAD EN BASE DE DATOS ---
         duplicate = None
         if self.trade_db:
             duplicate = self.trade_db.find_duplicate_signal(
@@ -128,20 +148,48 @@ class MrCashondoBot:
                 window_minutes=60
             )
         if duplicate:
-            # Comprobar si hay cambios relevantes en SL, TP, entry
             diff_entry = abs(signal.entry_price - duplicate.get('entry_price', 0)) > 0.0005 * signal.entry_price
             diff_sl = abs(signal.stop_loss - duplicate.get('stop_loss', 0)) > 0.0005 * signal.entry_price
             diff_tp = abs(signal.take_profit - duplicate.get('take_profit', 0)) > 0.0005 * signal.entry_price
             if diff_sl or diff_tp:
-                # Sugerir actualización de trailing o parámetros
                 logger.info(f"[DUPLICATE][TRAILING] Señal duplicada detectada, pero SL/TP cambiaron. Sugerir actualización de trailing o parámetros para la señal original (ID {duplicate['id']}).")
-                # Aquí podrías actualizar la señal original en la base de datos si lo deseas:
-                # self.trade_db.update_signal_params(duplicate['id'], {'stop_loss': signal.stop_loss, 'take_profit': signal.take_profit})
-                # Por ahora, solo logueamos y descartamos la nueva señal
                 return
             else:
                 logger.info(f"[DUPLICATE][DISCARDED] Señal duplicada detectada para {signal.symbol} {signal.signal_type} en {getattr(signal, 'timeframe', 'UNKNOWN')}. Se descarta la nueva señal y se mantiene la original (ID {duplicate['id']}).")
                 return
+
+        # --- FILTRO DE DUPLICIDAD EN POSICIONES ABIERTAS EN MT5 ---
+        open_positions = []
+        if self.mt5_connector and hasattr(self.mt5_connector, 'get_open_positions'):
+            try:
+                open_positions = self.mt5_connector.get_open_positions()
+            except Exception as e:
+                logger.error(f"[MT5] Error al obtener posiciones abiertas: {e}")
+        is_duplicate_mt5 = False
+        for pos in open_positions:
+            pos_symbol = pos.get('symbol') if isinstance(pos, dict) else getattr(pos, 'symbol', None)
+            pos_type = pos.get('type') if isinstance(pos, dict) else getattr(pos, 'type', None)
+            order_type = 0 if signal.signal_type == "BUY" else 1
+            if pos_symbol == signal.symbol and pos_type == order_type:
+                is_duplicate_mt5 = True
+                break
+        if is_duplicate_mt5:
+            logger.info(f"[DUPLICATE][MT5] Ya existe una posición abierta en MT5 para {signal.symbol} {signal.signal_type}. Se descarta la señal.")
+            if self.trade_db:
+                # Registrar el intento de duplicado en la base de datos
+                self.trade_db.log_signal({
+                    'symbol': signal.symbol,
+                    'timeframe': getattr(signal, 'timeframe', 'UNKNOWN'),
+                    'signal_type': signal.signal_type,
+                    'entry_price': signal.entry_price,
+                    'stop_loss': signal.stop_loss,
+                    'take_profit': signal.take_profit,
+                    'confidence': getattr(signal, 'confidence', 0.0),
+                    'timestamp': getattr(signal, 'timestamp', datetime.now(timezone.utc).isoformat()),
+                    'status': 'duplicate_mt5',
+                    'generation_params': None
+                }, generation_params={'reason': 'duplicate_mt5'})
+            return
         try:
             # FILTRO DE TIPO DE SÍMBOLO: solo operar FOREX, índices y commodities/metales
             if not self.signal_generator._is_symbol_type_enabled(signal.symbol):
@@ -198,6 +246,44 @@ class MrCashondoBot:
                 except Exception as e:
                     logger.error(f"[DB] Error al registrar señal: {e}")
                     signal_id = None
+
+            # --- DOBLE VALIDACIÓN DE DUPLICADOS: POSICIONES ABIERTAS EN MT5 ---
+            # Consultar posiciones abiertas en MT5 antes de ejecutar la orden
+            open_positions = []
+            if self.mt5_connector and hasattr(self.mt5_connector, 'get_open_positions'):
+                try:
+                    open_positions = self.mt5_connector.get_open_positions()
+                except Exception as e:
+                    logger.error(f"[MT5] Error al obtener posiciones abiertas: {e}")
+            # Revisar si ya hay una posición abierta igual (símbolo y tipo)
+            is_duplicate_mt5 = False
+            for pos in open_positions:
+                # pos puede ser dict u objeto, adaptamos
+                pos_symbol = pos.get('symbol') if isinstance(pos, dict) else getattr(pos, 'symbol', None)
+                pos_type = pos.get('type') if isinstance(pos, dict) else getattr(pos, 'type', None)
+                # type: 0=BUY, 1=SELL en MT5
+                order_type = 0 if signal.signal_type == "BUY" else 1
+                if pos_symbol == signal.symbol and pos_type == order_type:
+                    is_duplicate_mt5 = True
+                    break
+            if is_duplicate_mt5:
+                logger.info(f"[DUPLICATE][MT5] Ya existe una posición abierta en MT5 para {signal.symbol} {signal.signal_type}. Se descarta la señal.")
+                if self.trade_db and signal_id:
+                    self.trade_db.update_signal_status(signal_id, "duplicate_mt5")
+                elif self.trade_db:
+                    self.trade_db.log_signal({
+                        'symbol': signal.symbol,
+                        'timeframe': getattr(signal, 'timeframe', 'UNKNOWN'),
+                        'signal_type': signal.signal_type,
+                        'entry_price': signal.entry_price,
+                        'stop_loss': signal.stop_loss,
+                        'take_profit': signal.take_profit,
+                        'confidence': getattr(signal, 'confidence', 0.0),
+                        'timestamp': getattr(signal, 'timestamp', datetime.now(timezone.utc).isoformat()),
+                        'status': 'duplicate_mt5',
+                        'generation_params': None
+                    }, generation_params={'reason': 'duplicate_mt5'})
+                return
 
             # 1. Validar stops antes de procesar la señal
             order_type = 0 if signal.signal_type == "BUY" else 1  # Convertir a tipo MT5
